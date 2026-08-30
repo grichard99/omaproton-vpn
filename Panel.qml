@@ -1063,7 +1063,7 @@ Panel {
 
               Toggle {
                 width: parent.width
-                label: "NetShield"
+                label: "NetShield · PLUS"
                 description: {
                   var applying = vpn.configPendingLabel("netshield")
                   if (applying !== "") return applying
