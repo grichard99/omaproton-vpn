@@ -538,7 +538,7 @@ if they stop while `tailscale status` still lists your devices and their
 device by its `100.x` address, or disconnect Proton for a moment to confirm
 that's all it is.
 
-### Exit nodes
+### Tailscale Exit nodes
 
 A Tailscale exit node routes **all** of a device's internet traffic through
 another machine on your tailnet, which makes it a second full VPN, and two
