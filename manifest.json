@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.grichard99.omaproton-vpn",
   "name": "OmaProton VPN",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "author": "grichard99",
   "license": "MIT",
   "description": "Proton VPN, built for Omarchy. No terminal: one click to connect, a world map of cities, Kill Switch, in a widget that wears every Omarchy theme.",
