@@ -513,13 +513,13 @@ rather not.
 
 ## Using it with Tailscale
 
-They get along. Tailscale only carries traffic between your own devices;
+They work great together. Tailscale only carries traffic between your own devices;
 Proton carries everything else. Out of the box the two split the work instead
 of fighting over it, so your tailnet stays reachable while the VPN is up, and
 nothing here needs configuring. The three situations below are the ones people
 actually hit.
 
-### If Tailscale breaks, check the Kill Switch first
+### If Tailscale machines aren't reachable, check the Kill Switch first
 
 The Kill Switch blocks any traffic that doesn't go through Proton's tunnel,
 and Tailscale's direct device-to-device connections are exactly that kind of
