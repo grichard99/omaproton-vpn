@@ -11,6 +11,22 @@ terminal. Click the Proton mark and you're protected.
 
 *Live, and in your theme.*
 
+## Contents
+
+- [Why "Oma"](#why-oma)
+- [New to Proton?](#new-to-proton)
+- [What you need](#what-you-need)
+- [Install](#install), [Update](#update), [Remove](#remove)
+- [How to use it](#how-to-use-it): the bar icon, the map, quick connect,
+  countries and cities, traffic, [keyboard](#keyboard)
+- [How the protections work](#how-the-protections-work): Kill Switch,
+  NetShield, Always On, [port forwarding](#port-forwarding), split tunneling,
+  and [why the Kill Switch and split tunneling can't both be on](#why-the-kill-switch-and-split-tunneling-cant-both-be-on)
+- [Using it with Tailscale](#using-it-with-tailscale)
+- [Settings](#settings)
+- [Security and privacy](#security-and-privacy)
+- [Notes](#notes), [Credits](#credits), [License](#license)
+
 ## Why "Oma"
 
 Because it doesn't look like a VPN app that landed on your desktop. It looks
@@ -41,20 +57,6 @@ credentials are stored by this plugin, your password and 2FA code go straight
 into the CLI's own prompt, and Proton's client owns the session from there.
 
 <img src="docs/panel.png" width="360" alt="The OmaProton VPN panel: world map, connection details, live traffic, quick connect">
-
-## Contents
-
-- [New to Proton?](#new-to-proton)
-- [What you need](#what-you-need)
-- [Install](#install), [Update](#update), [Remove](#remove)
-- [How to use it](#how-to-use-it): the bar icon, the map, quick connect,
-  countries and cities, traffic, [keyboard](#keyboard)
-- [How the protections work](#how-the-protections-work): Kill Switch,
-  NetShield, Always On, [port forwarding](#port-forwarding), split tunneling,
-  and [why the Kill Switch and split tunneling can't both be on](#why-the-kill-switch-and-split-tunneling-cant-both-be-on)
-- [Settings](#settings)
-- [Security and privacy](#security-and-privacy)
-- [Notes](#notes), [Credits](#credits), [License](#license)
 
 ## New to Proton?
 
@@ -508,6 +510,52 @@ Disconnected, You're no longer protected." Connecting shows "VPN Connected"
 with the server and the protocol. Neither shows while the panel is open, since
 the panel already tells you. Turn both off in the widget's settings if you'd
 rather not.
+
+## Using it with Tailscale
+
+They get along. Tailscale only carries traffic between your own devices;
+Proton carries everything else. Out of the box the two split the work instead
+of fighting over it, so your tailnet stays reachable while the VPN is up, and
+nothing here needs configuring. The three situations below are the ones people
+actually hit.
+
+### If Tailscale breaks, check the Kill Switch first
+
+The Kill Switch blocks any traffic that doesn't go through Proton's tunnel,
+and Tailscale's direct device-to-device connections are exactly that kind of
+traffic. If your peers drop off the moment you connect, this is almost always
+why. There's no setting that makes the two promises compatible, a Kill Switch
+with a Tailscale-shaped hole in it wouldn't be a Kill Switch, so it's a
+choice: Kill Switch on and Proton owns everything, or Kill Switch off and
+Tailscale runs alongside.
+
+### If devices answer by IP but not by name
+
+Proton points your DNS at its own resolver inside the tunnel. Tailscale's
+MagicDNS names (`something.ts.net`) usually keep resolving alongside it, but
+if they stop while `tailscale status` still lists your devices and their
+`100.x` addresses still answer, nothing is down, only name lookup. Reach the
+device by its `100.x` address, or disconnect Proton for a moment to confirm
+that's all it is.
+
+### Exit nodes
+
+A Tailscale exit node routes **all** of a device's internet traffic through
+another machine on your tailnet, which makes it a second full VPN, and two
+full VPNs on one machine both want to own where your packets go.
+
+| You want | Do this |
+| --- | --- |
+| Proton here, tailnet devices reachable | Just connect. The everyday case; nothing to set up. |
+| Your traffic to exit through Proton on a machine at home | Run Proton on the home machine and use it as your exit node; this laptop runs Tailscale only. Traffic goes laptop, tailnet, home machine, out through its Proton tunnel, and shows Proton's IP to the world. |
+| Proton on this machine *while* using an exit node | Don't. Both claim your default route, and Proton's in-tunnel DNS can stop resolving anything at all. Pick one at a time. |
+
+For the middle row, two settings on the home machine make it dependable: keep
+its Kill Switch **off** (it would block the tailnet link your traffic arrives
+on) and turn **Always On** on, so the Proton tunnel your remote traffic
+depends on comes back by itself. One honest caveat: if that tunnel is down,
+your traffic still flows, just from the home connection's own IP rather than
+Proton's.
 
 ## Settings
 
