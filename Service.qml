@@ -303,6 +303,15 @@ Item {
     _watchStartedMs = Date.now()
     watchProcess.command = ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE,STATE", "connection", "show", "--active"]
     watchProcess.running = true
+
+    // Proton's own file watch can go stale: if the CLI/app rewrote
+    // settings.json (say, adding the `features` block on a first connect)
+    // before this plugin ever read one, or the rewrite happened between two
+    // inotify events, protonSettings is left stuck null with nothing left to
+    // trigger a re-read. Piggyback this same periodic tick to retry, so the
+    // Split tunneling row heals itself in a few seconds instead of needing a
+    // shell restart.
+    if (!protonSettings) protonFile.reload()
   }
 
   function refreshStatus() {
