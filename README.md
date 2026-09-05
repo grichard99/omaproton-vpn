@@ -141,8 +141,7 @@ the icon it uses in notifications); delete it if you like.
 ### The bar icon
 
 The Proton mark sits in your bar in the theme's foreground colour. Solid means
-protected; dimmed means not. Connected through a [profile](#connections--profiles),
-it takes that profile's colour instead.
+protected; dimmed means not.
 
 | Action | What it does |
 | --- | --- |
@@ -222,8 +221,8 @@ The Protection tab has enough rules behind it to deserve its own chapter:
 ### Connections → Profiles
 
 A profile is a place you've named, in a colour of your theme. "Home" in green,
-"Work" in blue, "Torrents" in magenta: one click each, and the panel and bar
-icon light up in that colour while you're on it, so a glance says which one.
+"Work" in blue, "Torrents" in magenta: one click each. The row's dot wears the
+colour and the header leads with the name while you're on it.
 
 Click **New profile** and the editor opens in place of the list:
 

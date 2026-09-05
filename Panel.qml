@@ -96,12 +96,8 @@ Panel {
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
-  // Connected through a profile, the icon takes that profile's colour, in
-  // the panel and in the bar: which place you're on, at a glance, in a colour
-  // the theme already owns.
-  readonly property color profileTint: vpn.connected && vpn.activeProfileEntry ? themeColor(vpn.activeProfileEntry.color) : "transparent"
-  readonly property color iconColor: vpn.connected ? (vpn.activeProfileEntry ? profileTint : foreground) : dim
-  readonly property color barIconColor: vpn.connected ? (vpn.activeProfileEntry ? profileTint : barForeground) : Qt.darker(barForeground, 1.55)
+  readonly property color iconColor: vpn.connected ? foreground : dim
+  readonly property color barIconColor: vpn.connected ? barForeground : Qt.darker(barForeground, 1.55)
 
   // ── Theme palette ───────────────────────────────────────────────────────
   // The shell's Color only carries accent, foreground, background, urgent and
