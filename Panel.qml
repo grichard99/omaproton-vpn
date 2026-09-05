@@ -72,6 +72,8 @@ Panel {
   onSplitDetailVisibleChanged: {
     if (protectionIndex >= protectionCount) protectionIndex = protectionCount - 1
   }
+  property int profileIndex: 0
+  property int editorIndex: 0
   property int recentIndex: 0
   property int countryIndex: 0
   property int serverIndex: 0
@@ -97,6 +99,170 @@ Panel {
   readonly property color iconColor: vpn.connected ? foreground : dim
   readonly property color barIconColor: vpn.connected ? barForeground : Qt.darker(barForeground, 1.55)
 
+  // ── Theme palette ───────────────────────────────────────────────────────
+  // The shell's Color only carries accent, foreground, background, urgent and
+  // muted. A profile wants the rest of the theme's names (Tokyo Night's pinks
+  // and purples, Jade's greens), so colors.toml is read here too, with the
+  // same line rule the shell uses. Profiles store the name, never the hex,
+  // so a theme switch recolours every row on its own.
+  property var themePalette: ({})
+
+  function themeColor(name) {
+    var n = String(name || "")
+    if (n === "" || n === "accent") return Color.accent
+    var v = themePalette[n]
+    return v ? v : Color.accent
+  }
+
+  function loadPalette(raw) {
+    var lines = String(raw || "").split("\n")
+    var out = {}
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/^\s*([A-Za-z0-9_-]+)\s*=\s*["']?(#[0-9A-Fa-f]{6})/)
+      if (m) out[m[1]] = m[2]
+    }
+    themePalette = out
+  }
+
+  FileView {
+    id: paletteFile
+    path: Color.currentThemePath + "/colors.toml"
+    watchChanges: false
+    printErrors: false
+    onLoaded: root.loadPalette(text())
+    onLoadFailed: root.themePalette = {}
+  }
+
+  // A theme switch reaches the shell as a new accent or foreground; the
+  // symlink under it has changed by then, so re-read the palette too.
+  Connections {
+    target: Color
+    function onAccentChanged() { paletteFile.reload() }
+    function onForegroundChanged() { paletteFile.reload() }
+    function onBackgroundChanged() { paletteFile.reload() }
+  }
+
+  // ── Profile editor ──────────────────────────────────────────────────────
+  // The draft being edited, or null. {id, isNew, color, where, feature,
+  // serverOption}; the name lives in nameField until Save. `where` is "",
+  // "random", "country:CC" or "server:NAME"; `serverOption` is the dropdown
+  // row for a named server, which the country list can't supply.
+  property var draft: null
+  readonly property var editorRows: draft === null ? []
+                                    : (draft.isNew ? ["name", "color", "where", "feature", "save", "cancel"]
+                                                   : ["name", "color", "where", "feature", "save", "cancel", "delete"])
+  readonly property string editorRow: draft !== null && editorIndex < editorRows.length ? editorRows[editorIndex] : ""
+  readonly property var featureOptions: [
+    { value: "", label: "None" },
+    { value: "p2p", label: "P2P" },
+    { value: "securecore", label: "Secure Core" },
+    { value: "tor", label: "Tor" }
+  ]
+  readonly property var whereOptions: {
+    var list = [
+      { value: "", label: "Fastest", description: "Best server for your location" },
+      { value: "random", label: "Random", description: "Any available server" }
+    ]
+    if (draft !== null && draft.serverOption) list.push(draft.serverOption)
+    for (var i = 0; i < vpn.countries.length; i++) {
+      list.push({ value: "country:" + vpn.countries[i].code, label: vpn.countries[i].name })
+    }
+    return list
+  }
+
+  function whereOf(args) {
+    for (var i = 0; i < args.length; i++) {
+      if (args[i] === "--country" && i + 1 < args.length) return "country:" + args[i + 1]
+      if (args[i] === "--random") return "random"
+      if (args[i].charAt(0) !== "-") return "server:" + args[i]
+    }
+    return ""
+  }
+
+  function featureOf(args) {
+    if (args.indexOf("--p2p") !== -1) return "p2p"
+    if (args.indexOf("--securecore") !== -1) return "securecore"
+    if (args.indexOf("--tor") !== -1) return "tor"
+    return ""
+  }
+
+  function setDraft(key, value) {
+    if (draft === null) return
+    var d = Object.assign({}, draft)
+    d[key] = value
+    draft = d
+  }
+
+  // Edit an existing profile, or start a new one where you are: the top of
+  // Recent is the place you last asked for, which is usually the one worth
+  // naming. Only the draft changes here; the state file waits for Save.
+  function openEditor(profile) {
+    clearHighlight()
+    var src = profile ? profile : (vpn.recents.length > 0 ? vpn.recents[0] : null)
+    var args = src && Array.isArray(src.args) ? src.args : []
+    var where = whereOf(args)
+    var d = {
+      id: profile ? profile.id : vpn.newProfileId(),
+      isNew: !profile,
+      color: profile ? profile.color : "accent",
+      where: where,
+      feature: featureOf(args),
+      serverOption: where.indexOf("server:") === 0 && src
+                    ? { value: where, label: src.title, description: src.subtitle } : null
+    }
+    nameField.text = profile ? profile.name : ""
+    draft = d
+    editorIndex = 0
+    cursorActive = true
+    focusSection = "editor"
+    Qt.callLater(function() { if (nameField.visible) nameField.forceActiveFocus() })
+  }
+
+  function closeEditor(selectId) {
+    draft = null
+    keyCatcher.forceActiveFocus()
+    focusSection = "profiles"
+    profileIndex = vpn.profiles.length
+    for (var i = 0; i < vpn.profiles.length; i++) if (vpn.profiles[i].id === selectId) profileIndex = i
+    ensureCursor()
+    scrollCursorIntoView()
+  }
+
+  function saveDraft() {
+    if (draft === null) return
+    var name = String(nameField.text || "").trim()
+    if (name === "") { nameField.forceActiveFocus(); return }
+    var so = draft.serverOption
+    var p = vpn.buildProfile(draft.id, name, draft.color, draft.where, draft.feature,
+                             so ? so.label : "", so ? so.description : "")
+    if (!p || !vpn.saveProfile(p)) return
+    closeEditor(p.id)
+  }
+
+  function deleteDraft() {
+    if (draft === null || draft.isNew) return
+    vpn.deleteProfile(draft.id)
+    closeEditor("")
+  }
+
+  function cycleColor(step) {
+    if (draft === null) return
+    var names = vpn.profileColors
+    var i = Math.max(0, names.indexOf(draft.color))
+    setDraft("color", names[(i + step + names.length) % names.length])
+  }
+
+  function activateEditorRow() {
+    var row = editorRow
+    if (row === "name") nameField.forceActiveFocus()
+    else if (row === "color") cycleColor(1)
+    else if (row === "where") whereRow.toggle()
+    else if (row === "feature") { if (featureRow.enabled) featureRow.toggle() }
+    else if (row === "save") saveDraft()
+    else if (row === "cancel") closeEditor(draft.id)
+    else if (row === "delete") deleteDraft()
+  }
+
   readonly property var quickActions: [
     { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false },
     { key: "random", label: "Random", hint: "Any available server", plus: false },
@@ -121,9 +287,12 @@ Panel {
       if (server === "") return "Protected"
       // The feature you asked for, then the server: two hops deserve saying
       // so, and a P2P click should visibly have landed.
-      if (Model.isSecureCore(vpn.displayServer)) return "\udb82\udd9d Secure Core · " + server
-      if (vpn.p2pRequested && vpn.currentP2p) return "\udb81\udc97 P2P · " + server
-      return server
+      var meta = server
+      if (Model.isSecureCore(vpn.displayServer)) meta = "\udb82\udd9d Secure Core · " + server
+      else if (vpn.p2pRequested && vpn.currentP2p) meta = "\udb81\udc97 P2P · " + server
+      // Through a profile, the name you gave the place leads.
+      var prof = vpn.activeProfileEntry
+      return prof ? prof.name + " · " + meta : meta
     }
     if (!vpn.accountProbed) return "Checking…"
     if (!vpn.signedIn) return "Signed out"
@@ -150,6 +319,10 @@ Panel {
     if (tab === "protection") {
       list.push({ name: "protection", count: protectionCount })
     } else {
+      // The profile rows plus the "New profile" row, or the editor's rows
+      // while one is open.
+      if (draft !== null) list.push({ name: "editor", count: editorRows.length })
+      else list.push({ name: "profiles", count: vpn.profiles.length + 1 })
       if (vpn.recents.length > 0) list.push({ name: "recents", count: vpn.recents.length })
       if (drilled) list.push({ name: "servers", count: serverRowCount })
       else if (filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
@@ -162,6 +335,8 @@ Panel {
     if (name === "tabs") return tabIndex
     if (name === "quick") return quickIndex
     if (name === "protection") return protectionIndex
+    if (name === "profiles") return profileIndex
+    if (name === "editor") return editorIndex
     if (name === "recents") return recentIndex
     if (name === "countries") return countryIndex
     if (name === "servers") return serverIndex
@@ -173,6 +348,8 @@ Panel {
     else if (name === "tabs") tabIndex = value
     else if (name === "quick") quickIndex = value
     else if (name === "protection") protectionIndex = value
+    else if (name === "profiles") profileIndex = value
+    else if (name === "editor") editorIndex = value
     else if (name === "recents") recentIndex = value
     else if (name === "countries") countryIndex = value
     else if (name === "servers") serverIndex = value
@@ -258,8 +435,10 @@ Panel {
     ensureCursor()
     if (dy !== 0) anchorPending = false
 
-    // Horizontal moves drill in and out of a country's server list.
+    // Horizontal moves drill in and out of a country's server list. In the
+    // editor they walk the colour swatches.
     if (dx !== 0) {
+      if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
       return
@@ -305,6 +484,11 @@ Panel {
       else if (splitDetailVisible && protectionIndex === 6) splitAppsRow.toggle()
       else requestSignOut()
     }
+    else if (focusSection === "profiles") {
+      if (profileIndex < vpn.profiles.length) { vpn.connectProfile(vpn.profiles[profileIndex].id); showConnection() }
+      else openEditor(null)
+    }
+    else if (focusSection === "editor") activateEditorRow()
     else if (focusSection === "recents") { vpn.connectRecent(recentIndex); showConnection() }
     // Enter on a country opens its servers rather than connecting blind,
     // the first row inside is still "Fastest in <country>", so the old
@@ -417,10 +601,16 @@ Panel {
     else if (focusSection === "quick") column = quickColumn
     else if (focusSection === "tabs") column = tabRow
     else if (focusSection === "protection") column = protectionColumn
+    else if (focusSection === "profiles") column = profileColumn
+    else if (focusSection === "editor") column = editorColumn
     else if (focusSection === "recents") column = recentColumn
     else if (focusSection === "countries") column = countryColumn
     else if (focusSection === "servers") column = serverColumn
     var i = sectionIndex(focusSection)
+    // "New profile" is the last child of its column, after the Repeater.
+    if (focusSection === "profiles" && i >= vpn.profiles.length && column) i = column.children.length - 1
+    // The editor's three buttons share one row.
+    if (focusSection === "editor") i = Math.min(i, 4)
     // The Protection column carries the Account header and rows after its
     // switches; the sign-out row is its last child wherever the cursor for it
     // has ended up.
@@ -438,6 +628,8 @@ Panel {
       anchorPending = false
       cursorActive = false
       filterQuery = ""
+      draft = null
+      paletteFile.reload()
       vpn.clearServers()
       serverIndex = 0
       if (panelFlick) panelFlick.contentY = 0
@@ -578,8 +770,9 @@ Panel {
       // An open Mode or Apps popup owns the keyboard while it is up, or hjkl
       // would drive the cursor on the panel behind it, scrolling a list the
       // person can't see instead of moving inside the one they opened.
-      blocked: filterField.activeFocus || usernameField.activeFocus
+      blocked: filterField.activeFocus || usernameField.activeFocus || nameField.activeFocus
                || splitModeRow.popupOpen || splitAppsRow.popupOpen
+               || whereRow.popupOpen || featureRow.popupOpen
       onMoveRequested: function(dx, dy) {
         // A dialog with the screen dimmed behind it owns the keyboard, or the
         // cursor would be moving around underneath it unseen.
@@ -599,15 +792,21 @@ Panel {
         if (root.cursorActive) root.activateCursor()
       }
       // Inside a drill, escape backs out one level before it closes the panel.
+      // Inside the editor it drops the draft, the same way it backs out
+      // of a drill.
       onCloseRequested: {
         if (root.openDialog) { root.openDialog.canceled(); return }
+        if (root.draft !== null) { root.closeEditor(root.draft.id); return }
         root.drilled ? root.drillOut() : root.close()
       }
       onTabRequested: function(direction) { root.switchPanel(direction) }
-      // No single-letter actions on purpose: the panel takes keyboard focus
-      // when it opens, and a stray keystroke must never change the tunnel.
+      // No single-letter actions on the tunnel, on purpose: the panel takes
+      // keyboard focus when it opens, and a stray keystroke must never change
+      // it. "e" only opens the editor for the profile under the cursor.
       onTextKey: function(t) {
         if (t === "/") filterField.forceActiveFocus()
+        else if (t === "e" && root.cursorActive && root.focusSection === "profiles"
+                 && root.profileIndex < vpn.profiles.length) root.openEditor(vpn.profiles[root.profileIndex])
       }
 
       // What counts as the pointer actually moving. A row sliding under a
@@ -1062,15 +1261,18 @@ Panel {
               }
 
               Toggle {
+                id: netShieldRow
                 width: parent.width
                 label: "NetShield"
                 description: {
                   var applying = vpn.configPendingLabel("netshield")
                   if (applying !== "") return applying
                   if (!vpn.configLoaded) return "Loading…"
+                  // Once stepped down on a free plan, say which half was
+                  // skipped, or the switch comes on and the ads don't stop.
                   var v = String(vpn.config["netshield"] || "off")
                   if (v === "malware-ads-trackers") return "Blocking malware, ads and trackers"
-                  if (v === "malware-only") return "Blocking malware"
+                  if (v === "malware-only") return "Blocking malware · Ads and trackers need Plus"
                   return "Block malware, ads and trackers"
                 }
                 checked: vpn.netShieldOn
@@ -1080,6 +1282,10 @@ Panel {
                 fontFamily: root.fontFamily
                 onHovered: function(on) { if (on) root.setCursorFromHover("protection", 1) }
                 onClicked: { root.clearHighlight(); vpn.toggleNetShield() }
+
+                // The same PLUS tag the Quick Connect rows wear, on the
+                // label's line.
+                LabelTag { row: netShieldRow; text: "PLUS" }
               }
 
               // Widget-owned, unlike the two above: the CLI has no setting for
@@ -1222,6 +1428,203 @@ Panel {
                 enabled: !vpn.busy
                 onEntered: root.setCursorFromHover("protection", root.signOutIndex)
                 onClicked: root.requestSignOut()
+              }
+            }
+          }
+
+          // ── Profiles ────────────────────────────────────────────────────
+          // Named places in the theme's colours, above Recent. The editor
+          // takes the list's place while a profile is being written.
+          Column {
+            visible: vpn.signedIn && root.tab === "connections"
+            width: parent.width
+            spacing: Style.space(10)
+
+            PanelSectionHeader {
+              text: root.draft === null ? "PROFILES" : (root.draft.isNew ? "NEW PROFILE" : "EDIT PROFILE")
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+            }
+
+            Column {
+              id: profileColumn
+              visible: root.draft === null
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: vpn.profiles
+                ActionRow {
+                  required property var modelData
+                  required property int index
+                  width: profileColumn.width
+                  hasCursor: root.cursorActive && root.focusSection === "profiles" && root.profileIndex === index
+                  icon: "\udb81\udf65"
+                  iconColor: root.themeColor(modelData.color)
+                  title: modelData.name
+                  subtitle: [modelData.title, modelData.subtitle].filter(function(v) { return v !== "" }).join(" · ")
+                  trailing: vpn.connected && vpn.activeProfile === modelData.id ? "\udb80\udd2c" : ""
+                  editable: true
+                  enabled: !vpn.busy
+                  onEntered: root.setCursorFromHover("profiles", index)
+                  onClicked: { vpn.connectProfile(modelData.id); root.showConnection() }
+                  onEditClicked: root.openEditor(modelData)
+                }
+              }
+
+              ActionRow {
+                width: profileColumn.width
+                hasCursor: root.cursorActive && root.focusSection === "profiles" && root.profileIndex === vpn.profiles.length
+                icon: "\udb81\udc15"
+                title: "New profile"
+                subtitle: vpn.profiles.length === 0 ? "Name a place, pick a colour, get there in one click" : ""
+                onEntered: root.setCursorFromHover("profiles", vpn.profiles.length)
+                onClicked: root.openEditor(null)
+              }
+            }
+
+            BorderSurface {
+              visible: root.draft !== null
+              width: parent.width
+              implicitHeight: editorColumn.implicitHeight + Style.space(20)
+              radius: Style.cornerRadius
+              color: Style.controlFill(false, false, root.foreground, Color.accent)
+              borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+
+              Column {
+                id: editorColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(8)
+
+                TextField {
+                  id: nameField
+                  width: parent.width
+                  foreground: root.foreground
+                  placeholderText: "Name, like Home or Work"
+                  maximumLength: vpn.profileNameMax
+                  hasCursor: root.cursorActive && root.editorRow === "name"
+                  Keys.onEscapePressed: function(event) {
+                    keyCatcher.forceActiveFocus()
+                    event.accepted = true
+                  }
+                  Keys.onReturnPressed: function(event) {
+                    root.saveDraft()
+                    event.accepted = true
+                  }
+                }
+
+                // One swatch per theme colour; the chosen one grows a ring.
+                CursorSurface {
+                  id: swatchRow
+                  width: parent.width
+                  implicitHeight: Style.spacing.controlHeight
+                  hasCursor: root.cursorActive && root.editorRow === "color"
+                  foreground: root.foreground
+
+                  MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: root.setCursorFromHover("editor", 1)
+                  }
+
+                  RowLayout {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: Style.spacing.controlPaddingX
+                    anchors.rightMargin: Style.spacing.controlPaddingX
+                    spacing: Style.space(8)
+
+                    Text {
+                      text: "Colour"
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.body
+                      Layout.fillWidth: true
+                    }
+
+                    Repeater {
+                      model: vpn.profileColors
+                      Swatch {
+                        required property var modelData
+                        colorName: modelData
+                      }
+                    }
+                  }
+                }
+
+                SearchableDropdown {
+                  id: whereRow
+                  width: parent.width
+                  label: "Where"
+                  value: root.draft !== null ? root.draft.where : ""
+                  options: root.whereOptions
+                  placeholderText: "Search countries..."
+                  emptyText: "No countries match"
+                  hasCursor: root.cursorActive && root.editorRow === "where"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onHovered: function(on) { if (on) root.setCursorFromHover("editor", 2) }
+                  onChanged: function(v) { root.setDraft("where", v) }
+                }
+
+                // A named server takes precedence over every flag in the CLI,
+                // so the feature is off the table for a server profile.
+                Dropdown {
+                  id: featureRow
+                  width: parent.width
+                  label: "Feature"
+                  value: root.draft !== null ? root.draft.feature : ""
+                  options: root.featureOptions
+                  enabled: root.draft !== null && root.draft.where.indexOf("server:") !== 0 && root.draft.where !== "random"
+                  opacity: enabled ? 1.0 : 0.5
+                  hasCursor: root.cursorActive && root.editorRow === "feature"
+                  foreground: root.foreground
+                  fontFamily: root.fontFamily
+                  onHovered: function(on) { if (on) root.setCursorFromHover("editor", 3) }
+                  onChanged: function(v) { root.setDraft("feature", v) }
+                }
+
+                // Both dropdowns write their own `value` when a row is picked,
+                // which destroys a plain binding; these put the draft back in
+                // charge, so reopening the editor shows the profile's real
+                // settings and not the last thing clicked.
+                Binding { target: whereRow; property: "value"; value: root.draft !== null ? root.draft.where : "" }
+                Binding { target: featureRow; property: "value"; value: root.draft !== null ? root.draft.feature : "" }
+
+                Row {
+                  spacing: Style.space(8)
+
+                  Button {
+                    text: "Save"
+                    bordered: true
+                    foreground: root.foreground
+                    hasCursor: root.cursorActive && root.editorRow === "save"
+                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 4) }
+                    onClicked: root.saveDraft()
+                  }
+
+                  Button {
+                    text: "Cancel"
+                    foreground: root.dim
+                    hasCursor: root.cursorActive && root.editorRow === "cancel"
+                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 5) }
+                    onClicked: root.closeEditor(root.draft !== null ? root.draft.id : "")
+                  }
+
+                  Button {
+                    visible: root.draft !== null && !root.draft.isNew
+                    text: "Delete"
+                    foreground: root.urgent
+                    hasCursor: root.cursorActive && root.editorRow === "delete"
+                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 6) }
+                    onClicked: root.deleteDraft()
+                  }
+                }
               }
             }
           }
@@ -1377,11 +1780,15 @@ Panel {
   component ActionRow: CursorSurface {
     id: actionRow
     property string icon: ""
+    property color iconColor: root.foreground
     property string title: ""
     property string subtitle: ""
     property string trailing: ""
+    // A pencil on the right, and a right-click anywhere, open the editor.
+    property bool editable: false
     signal entered()
     signal clicked()
+    signal editClicked()
 
     foreground: root.foreground
     implicitHeight: actionContent.implicitHeight + Style.spacing.rowPaddingX
@@ -1392,8 +1799,13 @@ Panel {
       hoverEnabled: true
       cursorShape: actionRow.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
       enabled: actionRow.enabled
+      acceptedButtons: actionRow.editable ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
       onEntered: actionRow.entered()
-      onClicked: { root.clearHighlight(); actionRow.clicked() }
+      onClicked: function(mouse) {
+        root.clearHighlight()
+        if (actionRow.editable && mouse.button === Qt.RightButton) actionRow.editClicked()
+        else actionRow.clicked()
+      }
     }
 
     RowLayout {
@@ -1407,7 +1819,7 @@ Panel {
       Text {
         visible: actionRow.icon !== ""
         text: actionRow.icon
-        color: root.foreground
+        color: actionRow.iconColor
         font.family: root.fontFamily
         font.pixelSize: Style.font.heading
         Layout.alignment: Qt.AlignVCenter
@@ -1449,6 +1861,91 @@ Panel {
         font.pixelSize: Style.font.caption
         Layout.alignment: Qt.AlignVCenter
       }
+
+      Text {
+        visible: actionRow.editable
+        text: "\udb80\udfeb"
+        color: editHover.containsMouse ? root.foreground : root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        Layout.alignment: Qt.AlignVCenter
+        leftPadding: Style.space(4)
+
+        MouseArea {
+          id: editHover
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onClicked: { root.clearHighlight(); actionRow.editClicked() }
+        }
+      }
+    }
+  }
+
+  // A tag on the same line as a Toggle's label, after the label's text. The
+  // shell's Toggle has no trailing slot, so this sits over the row, placed
+  // off the bold label Text the Toggle draws and that text's own metrics. A
+  // Text takes no clicks, so the row underneath still owns the switch.
+  component LabelTag: Text {
+    id: tag
+    property Item row: null
+    // The Toggle's label: the first bold Text under the row.
+    readonly property Item labelItem: findLabel(row)
+    function findLabel(item) {
+      for (var i = 0; item && i < item.children.length; i++) {
+        var c = item.children[i]
+        if (c.font !== undefined && c.text !== undefined && c.font.bold === true) return c
+        var r = findLabel(c)
+        if (r) return r
+      }
+      return null
+    }
+    // Row > Column > Text: three levels between the label and the row.
+    readonly property Item labelColumn: labelItem ? labelItem.parent : null
+    readonly property Item labelRow: labelColumn ? labelColumn.parent : null
+
+    parent: row
+    visible: labelItem !== null && text !== ""
+    x: labelItem ? labelRow.x + labelColumn.x + labelItem.x + metrics.advanceWidth + Style.space(8) : 0
+    y: labelItem ? labelRow.y + labelColumn.y + labelItem.y + (labelItem.height - height) / 2 : 0
+    textFormat: Text.PlainText
+    color: root.dim
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+
+    TextMetrics {
+      id: metrics
+      font: tag.labelItem ? tag.labelItem.font : tag.font
+      text: tag.labelItem ? tag.labelItem.text : ""
+    }
+  }
+
+  // One theme colour as a dot; the chosen one is ringed in the foreground.
+  component Swatch: Item {
+    id: swatch
+    property string colorName: ""
+    readonly property bool selected: root.draft !== null && root.draft.color === colorName
+    implicitWidth: Style.space(22)
+    implicitHeight: Style.space(22)
+    Layout.alignment: Qt.AlignVCenter
+
+    Rectangle {
+      anchors.centerIn: parent
+      width: swatch.selected ? Style.space(20) : Style.space(14)
+      height: width
+      radius: width / 2
+      color: root.themeColor(swatch.colorName)
+      border.width: swatch.selected ? 2 : 0
+      border.color: root.foreground
+      Behavior on width { NumberAnimation { duration: 120 } }
+    }
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: root.setCursorFromHover("editor", 1)
+      onClicked: root.setDraft("color", swatch.colorName)
     }
   }
 
