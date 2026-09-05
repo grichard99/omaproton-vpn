@@ -18,7 +18,8 @@ terminal. Click the Proton mark and you're protected.
 - [What you need](#what-you-need)
 - [Install](#install), [Update](#update), [Remove](#remove)
 - [How to use it](#how-to-use-it): the bar icon, the map, quick connect,
-  countries and cities, traffic, [keyboard](#keyboard)
+  [profiles](#connections--profiles), countries and cities, traffic,
+  [keyboard](#keyboard)
 - [How the protections work](#how-the-protections-work): Kill Switch,
   NetShield, Always On, [port forwarding](#port-forwarding), split tunneling,
   and [why the Kill Switch and split tunneling can't both be on](#why-the-kill-switch-and-split-tunneling-cant-both-be-on)
@@ -132,15 +133,16 @@ protonvpn signout
 ```
 
 The widget also keeps a small folder of its own at
-`~/.local/state/omarchy-protonvpn/` (your recent locations and the icon it
-uses in notifications); delete it if you like.
+`~/.local/state/omarchy-protonvpn/` (your profiles, your recent locations and
+the icon it uses in notifications); delete it if you like.
 
 ## How to use it
 
 ### The bar icon
 
 The Proton mark sits in your bar in the theme's foreground colour. Solid means
-protected; dimmed means not.
+protected; dimmed means not. Connected through a [profile](#connections--profiles),
+it takes that profile's colour instead.
 
 | Action | What it does |
 | --- | --- |
@@ -208,14 +210,50 @@ you exit from.
 ### Two tabs: Connections and Protection
 
 Under Quick Connect sit two tabs, in the same pill style as Omarchy's network
-panel. **Connections** holds everywhere you can go: recent places, and the
-country and city lists. **Protection** holds everything about *how* you're
+panel. **Connections** holds everywhere you can go: your profiles, recent
+places, and the country and city lists. **Protection** holds everything about *how* you're
 protected: the Kill Switch, NetShield, Always On, port forwarding, split
 tunneling, and your
 account. The tab you pick stays until you close the panel.
 
 The Protection tab has enough rules behind it to deserve its own chapter:
 [How the protections work](#how-the-protections-work).
+
+### Connections → Profiles
+
+A profile is a place you've named, in a colour of your theme. "Home" in green,
+"Work" in blue, "Torrents" in magenta: one click each, and the panel and bar
+icon light up in that colour while you're on it, so a glance says which one.
+
+Click **New profile** and the editor opens in place of the list:
+
+| Field | What it takes |
+| --- | --- |
+| Name | Whatever you'd call it, up to 32 characters |
+| Colour | One of the theme's seven names: accent, red, yellow, green, cyan, blue, magenta |
+| Where | Fastest, Random, any country, or the exact server you're on right now |
+| Feature | None, P2P, Secure Core or Tor |
+
+A new profile starts where you are: the top of Recent, which is the server or
+country you last asked for. If that was a specific server, it's offered as an
+option under **Where**; pick a country instead and you get the fastest server
+there each time. The feature is added on top of a country ("fastest P2P in
+Switzerland"), and greyed out for a named server, because the CLI ignores every
+flag once a server is named.
+
+The colour is stored by name, not by value. Switch from Tokyo Night to Jade and
+every profile is repainted in Jade's idea of blue or magenta on its own. That's
+the whole reason the choices are the theme's names and not a colour picker.
+
+To change or remove one, click the pencil on its row, right-click the row, or
+press `e` with the row selected. The same editor comes back with a **Delete**
+button. Nothing is written until you press **Save**; `Esc` drops the draft.
+
+Connecting through a profile records the place to Recent the same way the row
+it stands for would, and Always On reconnects to that place, not to the
+profile. Profiles hold *where* to connect and which feature to ask for; the
+Kill Switch, NetShield and the other switches on the Protection tab are yours
+for every connection, so a profile doesn't change them.
 
 ### Connections → Recent
 
@@ -306,10 +344,16 @@ Everything in the panel is reachable without a mouse.
 | `Enter` | Activate: connect, flip a switch, open a picker |
 | `Esc` | Back out one level, then close the panel |
 | `/` | Jump to the country filter |
+| `e` | Edit the selected profile |
 
-There are no single-letter shortcuts on purpose: the panel takes keyboard
-focus when it opens, and a stray keystroke should never change your
-connection.
+There are no single-letter shortcuts that touch the tunnel, on purpose: the
+panel takes keyboard focus when it opens, and a stray keystroke should never
+change your connection. `e` only opens the editor for the profile under the
+selection, which changes nothing until you save.
+
+Inside the profile editor, `↑` `↓` move between the fields, `←` `→` walk the
+colour swatches, `Enter` puts the cursor in the name or opens a picker, and
+`Enter` in the name field saves.
 
 `Enter` on **Mode** or **Apps** opens that picker, which then owns the
 keyboard: inside the Apps list, typing filters it, arrows move, `Enter` ticks,
@@ -599,8 +643,8 @@ Omarchy plugin. It:
   connected-city lookup all come from it), reads the tunnel's byte counters
   under `/sys/class/net/` once a second while the panel is open, and writes
   two files of its own under `~/.local/state/omarchy-protonvpn/`
-  (`state.json`: recent location labels, whether you dismissed the Kill
-  Switch prompt, and whether Always On is on; `notification-icon.svg`: the
+  (`state.json`: your profiles, recent location labels, whether you dismissed
+  the Kill Switch prompt, and whether Always On is on; `notification-icon.svg`: the
   Proton mark in your theme's colour, for the notification)
 - writes one file that isn't its own, and only if you turn split tunneling on:
   `~/.config/Proton/VPN/settings.json`, Proton's own settings. Rules below.
