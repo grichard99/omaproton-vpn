@@ -1267,10 +1267,13 @@ Panel {
                   var applying = vpn.configPendingLabel("netshield")
                   if (applying !== "") return applying
                   if (!vpn.configLoaded) return "Loading…"
+                  // Says which half needs Plus, the same tag the Quick
+                  // Connect rows wear, so a free account isn't left wondering
+                  // why the switch came on but the ads didn't stop.
                   var v = String(vpn.config["netshield"] || "off")
                   if (v === "malware-ads-trackers") return "Blocking malware, ads and trackers"
-                  if (v === "malware-only") return "Blocking malware"
-                  return "Block malware, ads and trackers"
+                  if (v === "malware-only") return "Blocking malware · Ads and trackers need Plus"
+                  return "Block malware, ads and trackers · Plus"
                 }
                 checked: vpn.netShieldOn
                 enabled: vpn.configLoaded && vpn.configPending === ""
