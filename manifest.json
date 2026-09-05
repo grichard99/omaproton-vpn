@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "OmaProton VPN",
-    "description": "Toggle Proton VPN, quick-connect by feature, pick a country or city, and manage Kill Switch, NetShield, Always On and split tunneling.",
+    "description": "Toggle Proton VPN, quick-connect by feature, save named profiles in your theme's colours, pick a country or city, and manage Kill Switch, NetShield, Always On and split tunneling.",
     "category": "Network",
     "allowMultiple": false,
     "defaultSection": "right",

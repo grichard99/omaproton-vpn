@@ -124,7 +124,7 @@ Item {
     portProcess.running = true
   }
 
-  onConnectedChanged: if (!connected) forwardedPort = ""
+  onConnectedChanged: if (!connected) { forwardedPort = ""; activeProfile = "" }
 
   // Copy is the only thing the widget ever does with the port.
   function copyForwardedPort() {
@@ -137,6 +137,25 @@ Item {
   property var recents: []
   property bool nudgeDismissed: false
   property bool stateLoaded: false
+
+  // ── Profiles ────────────────────────────────────────────────────────────
+  // A named place to connect to, in a colour of the theme: {id, name, color,
+  // args, title, subtitle}. `color` is the name of a theme colour ("blue",
+  // "magenta"…), never a hex value, so a profile keeps its role across theme
+  // switches: blue in Tokyo Night is a different blue in Nord, and that is
+  // the point. `args` is the same argv a recent carries, plus the feature
+  // flags, and `title`/`subtitle` describe the place the way Recent would.
+  property var profiles: []
+  readonly property var profileColors: ["accent", "red", "yellow", "green", "cyan", "blue", "magenta"]
+  readonly property int profileNameMax: 32
+  // The profile the live connection was started from, or "". Not persisted:
+  // after a restart the tunnel is the tunnel, and no profile claims it.
+  property string activeProfile: ""
+  readonly property var activeProfileEntry: {
+    if (activeProfile === "") return null
+    for (var i = 0; i < profiles.length; i++) if (profiles[i].id === activeProfile) return profiles[i]
+    return null
+  }
 
   // ── Always On ───────────────────────────────────────────────────────────
   // One invariant, not a set of triggers: if the switch is on and the tunnel
@@ -641,6 +660,8 @@ Item {
 
   function connectTo(args, label, target, auto) {
     if (!installed || !signedIn || busy) return
+    // Any connect that isn't a profile click ends the profile's claim.
+    activeProfile = ""
     p2pRequested = args.indexOf("--p2p") !== -1
     _autoAttempt = auto === true
     _desired = 1
@@ -684,6 +705,83 @@ Item {
     var r = recents[index]
     if (!r || !Array.isArray(r.args)) return
     connectTo(r.args, "Connecting to " + r.title + "…", r)
+  }
+
+  // A profile connects like the row it was made from: a country or server
+  // profile records that place to Recent, a feature-only one (P2P, Tor,
+  // Fastest) records wherever the CLI landed, exactly as the quick rows do.
+  function connectProfile(id) {
+    var p = null
+    for (var i = 0; i < profiles.length; i++) if (profiles[i].id === id) p = profiles[i]
+    if (!p || busy) return
+    var target = profileNamesPlace(p.args)
+      ? { key: "args:" + p.args.join(" "), title: p.title, subtitle: p.subtitle, args: p.args }
+      : null
+    connectTo(p.args, "Connecting to " + p.name + "…", target)
+    if (connectProcess.running) activeProfile = p.id
+  }
+
+  function profileNamesPlace(args) {
+    for (var i = 0; i < args.length; i++) if (args[i].charAt(0) !== "-") return true
+    return false
+  }
+
+  // Build the args and the place description from the editor's three
+  // choices. `where` is "" (fastest), "random", "country:CC" or
+  // "server:NAME"; `feature` is "", "p2p", "securecore" or "tor". A named
+  // server takes precedence over every flag in the CLI, so a feature on a
+  // server profile is dropped rather than stored as a lie.
+  function buildProfile(id, name, color, where, feature, placeTitle, placeSubtitle) {
+    var args = []
+    var title = "Fastest"
+    var subtitle = "Best server for your location"
+    var w = String(where || "")
+    if (w === "random") { args = ["--random"]; title = "Random"; subtitle = "Any available server" }
+    else if (w.indexOf("country:") === 0) {
+      var c = w.slice(8).toUpperCase()
+      if (!/^[A-Z]{2}$/.test(c)) return null
+      args = ["--country", c]
+      title = countryName(c)
+      subtitle = "Fastest server"
+    } else if (w.indexOf("server:") === 0) {
+      var n = w.slice(7)
+      if (!connectArg.test(n) || n.charAt(0) === "-") return null
+      args = [n]
+      title = placeTitle || n
+      subtitle = placeSubtitle || ""
+      feature = ""
+    }
+    var flag = { p2p: "--p2p", securecore: "--securecore", tor: "--tor" }[feature]
+    if (flag && w !== "random") {
+      args.push(flag)
+      var label = { p2p: "P2P", securecore: "Secure Core", tor: "Tor" }[feature]
+      if (w === "") { title = "Fastest " + label; subtitle = label === "P2P" ? "Optimized for file sharing" : "Via " + label }
+      else subtitle = subtitle === "" ? label : subtitle + " · " + label
+    }
+    return cleanProfile({ id: id, name: name, color: color, args: args, title: title, subtitle: subtitle })
+  }
+
+  // Upsert by id; a new profile gets a fresh id and goes last.
+  function saveProfile(p) {
+    var clean = cleanProfile(p)
+    if (!clean) return false
+    var next = profiles.slice()
+    var found = false
+    for (var i = 0; i < next.length; i++) if (next[i].id === clean.id) { next[i] = clean; found = true }
+    if (!found) next.push(clean)
+    profiles = next
+    saveState()
+    return true
+  }
+
+  function deleteProfile(id) {
+    profiles = profiles.filter(function(p) { return p.id !== id })
+    if (activeProfile === id) activeProfile = ""
+    saveState()
+  }
+
+  function newProfileId() {
+    return "p" + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36)
   }
 
   function loadServers(code, name) {
@@ -918,14 +1016,28 @@ Item {
     return { key: r.key, title: String(r.title || ""), subtitle: String(r.subtitle || ""), args: args }
   }
 
+  // Same rules as a recent for the argv, plus a name that fits on a row and
+  // a colour that is one of the theme's names. Anything else is dropped.
+  function cleanProfile(p) {
+    if (!p || typeof p !== "object" || typeof p.id !== "string" || !/^[A-Za-z0-9]{1,24}$/.test(p.id)) return null
+    var place = cleanRecent({ key: p.id, title: p.title, subtitle: p.subtitle, args: p.args })
+    if (!place) return null
+    var name = String(p.name || "").replace(/\s+/g, " ").trim().slice(0, profileNameMax)
+    if (name === "") return null
+    var color = profileColors.indexOf(p.color) !== -1 ? p.color : "accent"
+    return { id: p.id, name: name, color: color, args: place.args, title: place.title, subtitle: place.subtitle }
+  }
+
   function applyState(text) {
     try {
       var s = JSON.parse(String(text || "{}"))
       recents = Array.isArray(s.recents) ? s.recents.slice(0, 3).map(cleanRecent).filter(Boolean) : []
+      profiles = Array.isArray(s.profiles) ? s.profiles.slice(0, 24).map(cleanProfile).filter(Boolean) : []
       nudgeDismissed = s.killSwitchNudgeDismissed === true
       autoConnect = s.autoConnect === true
     } catch (e) {
       recents = []
+      profiles = []
       nudgeDismissed = false
       autoConnect = false
     }
@@ -935,6 +1047,7 @@ Item {
   function saveState() {
     stateFile.setText(JSON.stringify({
       recents: recents,
+      profiles: profiles,
       killSwitchNudgeDismissed: nudgeDismissed,
       autoConnect: autoConnect
     }))
@@ -1429,6 +1542,7 @@ Item {
       else if (wasAuto) root._autoPinFailed = true
       if (exitCode !== 0) {
         root._desired = -1
+        root.activeProfile = ""
         var text = err || out || "Connect failed"
         root.lastError = Model.isPlanError(text) ? "Requires a Proton VPN Plus plan" : Model.elide(text)
         root.actionStatus = root.lastError
