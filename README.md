@@ -396,9 +396,9 @@ independently of the tunnel.
 Blocks malware, ads, and trackers at the DNS level, on Proton's side. Three
 levels: off, malware only, or malware plus ads and trackers. The switch asks
 for the full level; on a free plan Proton only allows malware blocking, and
-the widget steps down to that automatically instead of failing. The row is
-tagged Plus, and once stepped down it says that ads and trackers need Plus,
-so a free account knows what it got.
+the widget steps down to that automatically instead of failing. The row wears
+the same PLUS tag as the Quick Connect rows, and once stepped down it says
+that ads and trackers need Plus, so a free account knows what it got.
 
 ### Always On
 

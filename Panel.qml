@@ -1261,19 +1261,19 @@ Panel {
               }
 
               Toggle {
+                id: netShieldRow
                 width: parent.width
                 label: "NetShield"
                 description: {
                   var applying = vpn.configPendingLabel("netshield")
                   if (applying !== "") return applying
                   if (!vpn.configLoaded) return "Loading…"
-                  // Says which half needs Plus, the same tag the Quick
-                  // Connect rows wear, so a free account isn't left wondering
-                  // why the switch came on but the ads didn't stop.
+                  // Once stepped down on a free plan, say which half was
+                  // skipped, or the switch comes on and the ads don't stop.
                   var v = String(vpn.config["netshield"] || "off")
                   if (v === "malware-ads-trackers") return "Blocking malware, ads and trackers"
                   if (v === "malware-only") return "Blocking malware · Ads and trackers need Plus"
-                  return "Block malware, ads and trackers · Plus"
+                  return "Block malware, ads and trackers"
                 }
                 checked: vpn.netShieldOn
                 enabled: vpn.configLoaded && vpn.configPending === ""
@@ -1282,6 +1282,10 @@ Panel {
                 fontFamily: root.fontFamily
                 onHovered: function(on) { if (on) root.setCursorFromHover("protection", 1) }
                 onClicked: { root.clearHighlight(); vpn.toggleNetShield() }
+
+                // The same PLUS tag the Quick Connect rows wear, on the
+                // label's line.
+                LabelTag { row: netShieldRow; text: "PLUS" }
               }
 
               // Widget-owned, unlike the two above: the CLI has no setting for
@@ -1875,6 +1879,44 @@ Panel {
           onClicked: { root.clearHighlight(); actionRow.editClicked() }
         }
       }
+    }
+  }
+
+  // A tag on the same line as a Toggle's label, after the label's text. The
+  // shell's Toggle has no trailing slot, so this sits over the row, placed
+  // off the bold label Text the Toggle draws and that text's own metrics. A
+  // Text takes no clicks, so the row underneath still owns the switch.
+  component LabelTag: Text {
+    id: tag
+    property Item row: null
+    // The Toggle's label: the first bold Text under the row.
+    readonly property Item labelItem: findLabel(row)
+    function findLabel(item) {
+      for (var i = 0; item && i < item.children.length; i++) {
+        var c = item.children[i]
+        if (c.font !== undefined && c.text !== undefined && c.font.bold === true) return c
+        var r = findLabel(c)
+        if (r) return r
+      }
+      return null
+    }
+    // Row > Column > Text: three levels between the label and the row.
+    readonly property Item labelColumn: labelItem ? labelItem.parent : null
+    readonly property Item labelRow: labelColumn ? labelColumn.parent : null
+
+    parent: row
+    visible: labelItem !== null && text !== ""
+    x: labelItem ? labelRow.x + labelColumn.x + labelItem.x + metrics.advanceWidth + Style.space(8) : 0
+    y: labelItem ? labelRow.y + labelColumn.y + labelItem.y + (labelItem.height - height) / 2 : 0
+    textFormat: Text.PlainText
+    color: root.dim
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+
+    TextMetrics {
+      id: metrics
+      font: tag.labelItem ? tag.labelItem.font : tag.font
+      text: tag.labelItem ? tag.labelItem.text : ""
     }
   }
 
