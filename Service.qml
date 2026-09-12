@@ -136,6 +136,9 @@ Item {
   // kill-switch nudge was dismissed. Location labels only, nothing secret.
   property var recents: []
   property bool nudgeDismissed: false
+  // The Connections tab's country list is folded away until asked for, and
+  // stays however it was last left.
+  property bool countriesExpanded: false
   property bool stateLoaded: false
 
   // ── Profiles ────────────────────────────────────────────────────────────
@@ -1035,11 +1038,13 @@ Item {
       profiles = Array.isArray(s.profiles) ? s.profiles.slice(0, 24).map(cleanProfile).filter(Boolean) : []
       nudgeDismissed = s.killSwitchNudgeDismissed === true
       autoConnect = s.autoConnect === true
+      countriesExpanded = s.countriesExpanded === true
     } catch (e) {
       recents = []
       profiles = []
       nudgeDismissed = false
       autoConnect = false
+      countriesExpanded = false
     }
     stateLoaded = true
   }
@@ -1049,8 +1054,15 @@ Item {
       recents: recents,
       profiles: profiles,
       killSwitchNudgeDismissed: nudgeDismissed,
-      autoConnect: autoConnect
+      autoConnect: autoConnect,
+      countriesExpanded: countriesExpanded
     }))
+  }
+
+  function setCountriesExpanded(on) {
+    if (countriesExpanded === on) return
+    countriesExpanded = on
+    saveState()
   }
 
   // ── Always On ───────────────────────────────────────────────────────────
