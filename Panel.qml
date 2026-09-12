@@ -1304,6 +1304,7 @@ Panel {
               }
 
               Toggle {
+                id: portForwardRow
                 width: parent.width
                 label: "Port forwarding"
                 description: {
@@ -1322,6 +1323,10 @@ Panel {
                 fontFamily: root.fontFamily
                 onHovered: function(on) { if (on) root.setCursorFromHover("protection", 3) }
                 onClicked: { root.clearHighlight(); root.requestPortForwarding() }
+
+                // Needs a paid plan, like NetShield: the same tag, on the
+                // label's line, so a free account isn't told by a refusal.
+                LabelTag { row: portForwardRow; text: "PLUS" }
               }
 
 
