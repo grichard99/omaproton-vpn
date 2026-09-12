@@ -1369,11 +1369,22 @@ Item {
     command: []
     stdout: StdioCollector { id: statusStdout; waitForEnd: true }
     stderr: StdioCollector { id: statusStderr; waitForEnd: true }
-    onExited: function(exitCode) {
+    // `protonvpn status` sometimes prints its whole answer and then dies on
+    // the way out: a worker thread in Proton's native extension is still
+    // running while the interpreter is being torn down, and the process ends
+    // on a signal after everything was written and flushed. That reaches
+    // here as a crash exit with the signal number for a code. A crash after
+    // a complete Status line is a crash of the exit path, not of the answer,
+    // so the answer is kept. A normal non-zero exit is still the CLI saying
+    // it failed, and an unfinished line, a traceback or no output at all is
+    // still an error whatever ended the process.
+    onExited: function(exitCode, exitStatus) {
       root._probeRunning = false
       Qt.callLater(root.drainProbes)
-      if (exitCode === 0) {
-        root.applyStatus(String(statusStdout.text || ""))
+      var out = String(statusStdout.text || "")
+      var crashed = exitStatus !== 0
+      if (exitCode === 0 || (crashed && Model.statusComplete(out))) {
+        root.applyStatus(out)
         root.lastError = ""
       } else {
         root.lastError = Model.elide(String(statusStderr.text || "") || "protonvpn status failed")
