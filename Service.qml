@@ -254,6 +254,14 @@ Item {
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 30, 5, 3600)
   readonly property int watchIntervalSec: intSetting("watchIntervalSec", 4, 2, 60)
   readonly property bool notificationsOn: String(setting("notifications", "on")) !== "off"
+  // Sub-probe hardening. `protonvpn info` may hang indefinitely — when it
+  // blocks on the keyring SecretService (no default collection), for example —
+  // and Quickshell's Process offers no kill method, so a hung probe would
+  // freeze the panel on "Checking…" forever. Run the probe under `timeout` and
+  // surface a recoverable state once enough probes stall in a row.
+  readonly property int probeTimeoutSec: 15
+  readonly property int maxAccountStalls: 3
+  property int _accountStalls: 0
 
   // The server line from nmcli is live even mid-`connect`; prefer it, and fall
   // back to the status parse when the link is down.
@@ -336,7 +344,9 @@ Item {
     if (!installed) return
     if (cliBusy) { _wantAccount = true; return }
     _probeRunning = true
-    accountProcess.command = ["protonvpn", "info"]
+    // `timeout` ends a probe that hangs (exit 124) instead of leaving the
+    // panel staring at "Checking…" forever. See accountProcess.onExited.
+    accountProcess.command = ["timeout", String(probeTimeoutSec), "protonvpn", "info"]
     accountProcess.running = true
   }
 
@@ -1389,6 +1399,26 @@ Item {
     onExited: function(exitCode) {
       root._probeRunning = false
       Qt.callLater(root.drainProbes)
+      // `timeout` killed a stalled probe: exit 124. Quickshell can't kill a
+      // Process, so a CLI that hangs (e.g. blocked on the keyring
+      // SecretService) would otherwise freeze the panel on "Checking…"
+      // forever. After a few consecutive stalls, surface an actionable
+      // signed-out state so the panel offers sign-in again, while a slow
+      // retry keeps watching in case the CLI recovers.
+      if (exitCode === 124) {
+        if (++root._accountStalls >= root.maxAccountStalls) {
+          root.accountProbed = true
+          root.signedIn = false
+          root.lastError = "Account check timed out, sign in again"
+        }
+        accountRetry.interval = 60000
+        accountRetry.restart()
+        return
+      }
+      // The probe answered: any exit, even non-zero, is a live CLI, so drop
+      // the stall counter and resume the fast retry cadence.
+      root._accountStalls = 0
+      accountRetry.interval = 5000
       // A one-off failure must not latch "signed out" forever, retry instead
       // of leaving a signed-in user staring at a sign-in prompt.
       if (exitCode !== 0) { accountRetry.restart(); return }
