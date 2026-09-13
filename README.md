@@ -267,9 +267,16 @@ That top entry is also what Always On reconnects to.
 
 ### Connections → Countries and cities
 
-Below that is the full country list. **Clicking a country doesn't connect**,
-it drills into that country's cities, so you can see where you'll land before
-you commit.
+Below that is the full country list, folded away behind its **COUNTRIES**
+header until you want it. Most opens are a glance at the map, Fastest, a
+profile or a recent, and a hundred and fifty rows under those only push the
+panel to the edge of the screen. The header shows the count; click it, or
+press `Enter` or `→` on it, and the list opens with the filter box at its
+top. It stays open or folded the way you left it, across opens and shell
+restarts, and `/` opens it for you on the way to the filter.
+
+**Clicking a country doesn't connect**, it drills into that country's cities,
+so you can see where you'll land before you commit.
 
 <img src="docs/city-list.png" width="360" alt="Connections tab with Japan drilled open, Osaka, clicked on the map, is ringed">
 
@@ -338,11 +345,11 @@ Everything in the panel is reachable without a mouse.
 | Key | What it does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | Move through every section, top to bottom |
-| `→` or `l` | Open the selected country's city list |
-| `←` or `h` | Back out to the country list |
-| `Enter` | Activate: connect, flip a switch, open a picker |
+| `→` or `l` | Open the selected country's city list, or unfold the country list from its header |
+| `←` or `h` | Back out to the country list, or fold it from its header |
+| `Enter` | Activate: connect, flip a switch, open a picker, fold or unfold the country list |
 | `Esc` | Back out one level, then close the panel |
-| `/` | Jump to the country filter |
+| `/` | Jump to the country filter, unfolding the list if it was folded |
 | `e` | Edit the selected profile |
 
 There are no single-letter shortcuts that touch the tunnel, on purpose: the

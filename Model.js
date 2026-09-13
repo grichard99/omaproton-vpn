@@ -84,6 +84,14 @@ function parseStatus(raw) {
   }
 }
 
+// True when `raw` carries a whole answer from `protonvpn status`: a Status
+// line whose value is one of the words the CLI prints. Tells a run that
+// answered and then died on its way out from one that never answered.
+function statusComplete(raw) {
+  var v = parseKeyValues(raw).map["status"] || ""
+  return /^(connected|connecting|disconnected)$/i.test(v)
+}
+
 // "CH-US#3", "IS-JP#1", "SE-FR#2": only CH, IS and SE are entry countries.
 function isSecureCore(name) {
   return /^(CH|IS|SE)-[A-Z]{2}/i.test(String(name || "").trim())

@@ -325,7 +325,11 @@ Panel {
       else list.push({ name: "profiles", count: vpn.profiles.length + 1 })
       if (vpn.recents.length > 0) list.push({ name: "recents", count: vpn.recents.length })
       if (drilled) list.push({ name: "servers", count: serverRowCount })
-      else if (filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
+      else {
+        // The COUNTRIES header is a row of its own: it folds the list.
+        list.push({ name: "countriesHeader", count: 1 })
+        if (vpn.countriesExpanded && filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
+      }
     }
     return list
   }
@@ -361,9 +365,11 @@ Panel {
     var pos = -1
     for (var i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
     if (pos === -1) {
-      // Countries and servers stand in for each other across a drill.
+      // Countries and servers stand in for each other across a drill, and
+      // a folded list hands its cursor to the header that folded it.
       if (focusSection === "countries" && drilled) focusSection = "servers"
-      else if (focusSection === "servers" && !drilled) focusSection = "countries"
+      else if (focusSection === "servers" && !drilled) focusSection = vpn.countriesExpanded ? "countries" : "countriesHeader"
+      else if (focusSection === "countries") focusSection = "countriesHeader"
       else focusSection = list[0].name
       for (i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
       if (pos === -1) { focusSection = list[0].name; pos = 0 }
@@ -441,6 +447,9 @@ Panel {
       if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
+      // On the header they unfold and fold the list, the way they open and
+      // close a country.
+      else if (focusSection === "countriesHeader") setCountriesExpanded(dx > 0)
       return
     }
     if (dy === 0) return
@@ -493,8 +502,18 @@ Panel {
     // Enter on a country opens its servers rather than connecting blind,
     // the first row inside is still "Fastest in <country>", so the old
     // one-keystroke behaviour is only ever one row away.
+    else if (focusSection === "countriesHeader") setCountriesExpanded(!vpn.countriesExpanded)
     else if (focusSection === "countries") drillInto(filteredCountries[countryIndex])
     else if (focusSection === "servers") activateServerRow(serverIndex)
+  }
+
+  // The country list stays folded until asked for, and stays how it was
+  // left, across opens and shell restarts. Unfolding puts its header at the
+  // top of the view, the way a drill does, so the rows fill the panel.
+  function setCountriesExpanded(on) {
+    if (vpn.countriesExpanded === on) return
+    vpn.setCountriesExpanded(on)
+    if (on) anchorCountrySection()
   }
 
   function activateServerRow(index) {
@@ -604,6 +623,7 @@ Panel {
     else if (focusSection === "profiles") column = profileColumn
     else if (focusSection === "editor") column = editorColumn
     else if (focusSection === "recents") column = recentColumn
+    else if (focusSection === "countriesHeader") column = countrySection
     else if (focusSection === "countries") column = countryColumn
     else if (focusSection === "servers") column = serverColumn
     var i = sectionIndex(focusSection)
@@ -708,6 +728,7 @@ Panel {
         portForwarding: vpn.config["port-forwarding"] || "",
         forwardedPort: vpn.forwardedPort,
         countries: vpn.countries.length,
+        countriesExpanded: vpn.countriesExpanded,
         recents: vpn.recents.length,
         cities: vpn.cities.length,
         traffic: { device: vpn.linkDevice, samples: vpn.rxHistory.length, rx: vpn.rxRate, tx: vpn.txRate },
@@ -804,7 +825,8 @@ Panel {
       // keyboard focus when it opens, and a stray keystroke must never change
       // it. "e" only opens the editor for the profile under the cursor.
       onTextKey: function(t) {
-        if (t === "/") filterField.forceActiveFocus()
+        // The filter lives inside the list, so "/" unfolds it first.
+        if (t === "/") { root.setCountriesExpanded(true); filterField.forceActiveFocus() }
         else if (t === "e" && root.cursorActive && root.focusSection === "profiles"
                  && root.profileIndex < vpn.profiles.length) root.openEditor(vpn.profiles[root.profileIndex])
       }
@@ -1304,6 +1326,7 @@ Panel {
               }
 
               Toggle {
+                id: portForwardRow
                 width: parent.width
                 label: "Port forwarding"
                 description: {
@@ -1322,6 +1345,10 @@ Panel {
                 fontFamily: root.fontFamily
                 onHovered: function(on) { if (on) root.setCursorFromHover("protection", 3) }
                 onClicked: { root.clearHighlight(); root.requestPortForwarding() }
+
+                // Needs a paid plan, like NetShield: the same tag, on the
+                // label's line, so a free account isn't told by a refusal.
+                LabelTag { row: portForwardRow; text: "PLUS" }
               }
 
 
@@ -1670,11 +1697,60 @@ Panel {
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
-              textFormat: Text.PlainText
+            // The header is a row: it folds the list away and unfolds it,
+            // and carries the count while the rows are hidden. It hangs out
+            // past the column by a row's inset so its title stays in line
+            // with the other section headers. Inside a drill it is only the
+            // country's name, with nothing to click.
+            CursorSurface {
+              id: countriesHeader
+              x: -Style.space(10)
+              width: parent.width + Style.space(20)
+              hasCursor: !root.drilled && root.cursorActive && root.focusSection === "countriesHeader"
               foreground: root.foreground
-              fontFamily: root.fontFamily
+              implicitHeight: headerLabel.implicitHeight + Style.space(10)
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: !root.drilled
+                cursorShape: Qt.PointingHandCursor
+                onEntered: root.setCursorFromHover("countriesHeader", 0)
+                onClicked: { root.clearHighlight(); root.setCountriesExpanded(!vpn.countriesExpanded) }
+              }
+
+              PanelSectionHeader {
+                id: headerLabel
+                anchors.left: parent.left
+                anchors.leftMargin: Style.space(10)
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
+                textFormat: Text.PlainText
+                foreground: root.foreground
+                fontFamily: root.fontFamily
+              }
+
+              Text {
+                anchors.left: headerLabel.right
+                anchors.leftMargin: Style.space(8)
+                anchors.verticalCenter: headerLabel.verticalCenter
+                visible: !root.drilled && vpn.countriesLoaded
+                text: String(vpn.countries.length)
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                anchors.right: parent.right
+                anchors.rightMargin: Style.space(10)
+                anchors.verticalCenter: headerLabel.verticalCenter
+                visible: !root.drilled
+                text: vpn.countriesExpanded ? "\udb80\udd40" : "\udb80\udd42"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
             }
 
             BackRow {
@@ -1715,7 +1791,7 @@ Panel {
 
             TextField {
               id: filterField
-              visible: !root.drilled
+              visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               foreground: root.foreground
               placeholderText: vpn.countriesLoaded ? "Filter countries  (press /)" : "Loading countries…"
@@ -1742,7 +1818,7 @@ Panel {
             }
 
             Text {
-              visible: !root.drilled && vpn.countriesLoaded && root.filteredCountries.length === 0
+              visible: !root.drilled && vpn.countriesExpanded && vpn.countriesLoaded && root.filteredCountries.length === 0
               width: parent.width
               text: "No countries match."
               color: root.dim
@@ -1753,7 +1829,7 @@ Panel {
 
             Column {
               id: countryColumn
-              visible: !root.drilled
+              visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               spacing: Style.space(6)
 
