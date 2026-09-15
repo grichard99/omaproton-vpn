@@ -282,14 +282,15 @@ Panel {
   // Each row leads with a glyph in the foreground: hollow and dim until
   // that is the connection you are on, then filled and full, the way the
   // bar icon fills when the tunnel is up. Filled / outline pairs from the
-  // Nerd Font's Material set: lightning bolt, a die, share (the P2P glyph
-  // the header shows), layers for the two hops of Secure Core (the header
-  // shows the same), eye off.
+  // Nerd Font's Material set: lightning bolt, share (the P2P glyph the
+  // header shows), a plain shield for Secure Core (the header shows the
+  // same), eye off. Shuffle has no filled twin, so Random only changes
+  // weight, which is all the bar icon does too.
   readonly property var quickActions: [
     { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb85\udc0b", outline: "\udb85\udc0c" },
-    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb80\uddce", outline: "\udb84\udd4e" },
+    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udc9f", outline: "\udb81\udc9f" },
     { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", outline: "\udb85\udd14" },
-    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb80\udf28", outline: "\udb82\uddfe" },
+    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb81\udc98", outline: "\udb81\udc99" },
     { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb80\ude09", outline: "\udb81\uded1" }
   ]
 
@@ -318,7 +319,7 @@ Panel {
       // The feature you asked for, then the server: two hops deserve saying
       // so, and a P2P click should visibly have landed.
       var meta = server
-      if (Model.isSecureCore(vpn.displayServer)) meta = "\udb80\udf28 Secure Core · " + server
+      if (Model.isSecureCore(vpn.displayServer)) meta = "\udb81\udc98 Secure Core · " + server
       else if (vpn.p2pRequested && vpn.currentP2p) meta = "\udb81\udc97 P2P · " + server
       // Through a profile, the name you gave the place leads.
       var prof = vpn.activeProfileEntry
