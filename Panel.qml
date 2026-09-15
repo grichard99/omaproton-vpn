@@ -279,17 +279,26 @@ Panel {
     editorButtonIndex = Math.max(0, Math.min(editorButtons.length - 1, editorButtonIndex + step))
   }
 
-  // Each row leads with a glyph in one of the theme's colours, the same
-  // names a profile picks from, so they follow the theme the way the
-  // profile dots do. P2P and Secure Core reuse the glyphs the header shows
-  // while you are on one.
+  // Each row leads with a glyph in the foreground: hollow and dim until
+  // that is the connection you are on, then filled and full, the way the
+  // bar icon fills when the tunnel is up. Filled / outline pairs from the
+  // Nerd Font's Material set: lightning bolt, dice, share (the P2P glyph
+  // the header shows), shield lock (the Secure Core one), eye off.
   readonly property var quickActions: [
-    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb80\ude41", color: "yellow" },
-    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udc9e", color: "cyan" },
-    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", color: "blue" },
-    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb82\udd9d", color: "green" },
-    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb81\uddcd", color: "magenta" }
+    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb85\udc0b", outline: "\udb85\udc0c" },
+    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udf6e", outline: "\udb84\udd56" },
+    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", outline: "\udb85\udd14" },
+    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb82\udd9d", outline: "\udb83\udccc" },
+    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb80\ude09", outline: "\udb81\uded1" }
   ]
+
+  // Whether a Quick Connect row is the connection you are on. Secure Core
+  // can be read off the server name too, so it survives a shell restart.
+  function quickActive(key) {
+    if (!vpn.connected) return false
+    if (key === "securecore" && Model.isSecureCore(vpn.displayServer)) return true
+    return vpn.quickRequested === key
+  }
 
   readonly property var filteredCountries: Model.filterCountries(vpn.countries, filterQuery)
 
@@ -922,6 +931,7 @@ Panel {
         countries: vpn.countries.length,
         countriesExpanded: vpn.countriesExpanded,
         quickExpanded: vpn.quickExpanded,
+        quickRequested: vpn.quickRequested,
         profiles: vpn.profiles.length,
         profilesExpanded: vpn.profilesExpanded,
         recents: vpn.recents.length,
@@ -1427,8 +1437,8 @@ Panel {
                   required property int index
                   width: quickColumn.width
                   hasCursor: root.cursorActive && root.focusSection === "quick" && root.quickIndex === index
-                  icon: modelData.icon
-                  iconColor: root.themeColor(modelData.color)
+                  icon: root.quickActive(modelData.key) ? modelData.icon : modelData.outline
+                  iconColor: root.quickActive(modelData.key) ? root.foreground : root.dim
                   title: modelData.label
                   subtitle: modelData.hint
                   // Secure Core gets an ACTIVE tag; P2P doesn't, since most
