@@ -282,12 +282,12 @@ Panel {
   // Each row leads with a glyph in the foreground: hollow and dim until
   // that is the connection you are on, then filled and full, the way the
   // bar icon fills when the tunnel is up. Filled / outline pairs from the
-  // Nerd Font's Material set: lightning bolt, dice, share (the P2P glyph
+  // Nerd Font's Material set: lightning bolt, a die, share (the P2P glyph
   // the header shows), layers for the two hops of Secure Core (the header
   // shows the same), eye off.
   readonly property var quickActions: [
     { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb85\udc0b", outline: "\udb85\udc0c" },
-    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udf6e", outline: "\udb84\udd56" },
+    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb80\uddce", outline: "\udb84\udd4e" },
     { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", outline: "\udb85\udd14" },
     { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb80\udf28", outline: "\udb82\uddfe" },
     { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb80\ude09", outline: "\udb81\uded1" }
