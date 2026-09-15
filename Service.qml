@@ -136,6 +136,13 @@ Item {
   // kill-switch nudge was dismissed. Location labels only, nothing secret.
   property var recents: []
   property bool nudgeDismissed: false
+  // The Connections tab's lists fold behind their headers and stay however
+  // they were last left. Countries start folded, it is a hundred and fifty
+  // rows; Profiles and Recent are the quick picks, so they start open.
+  property bool countriesExpanded: false
+  property bool quickExpanded: true
+  property bool profilesExpanded: true
+  property bool recentsExpanded: true
   property bool stateLoaded: false
 
   // ── Profiles ────────────────────────────────────────────────────────────
@@ -657,12 +664,27 @@ Item {
   // clicked. Not persisted; after a restart the header shows the name.
   property bool p2pRequested: false
   readonly property bool currentP2p: !!(currentPlace && currentPlace.p2p === true)
+  // Which Quick Connect row the current connection was asked with, or ""
+  // for a named place: that row's glyph fills in while you are on it. A
+  // feature-only profile counts as its row. Not persisted, like the above.
+  property string quickRequested: ""
+
+  function quickKeyOf(args) {
+    var a = args || []
+    for (var i = 0; i < a.length; i++) if (String(a[i]).charAt(0) !== "-") return ""
+    if (a.indexOf("--p2p") !== -1) return "p2p"
+    if (a.indexOf("--securecore") !== -1) return "securecore"
+    if (a.indexOf("--tor") !== -1) return "tor"
+    if (a.indexOf("--random") !== -1) return "random"
+    return "fastest"
+  }
 
   function connectTo(args, label, target, auto) {
     if (!installed || !signedIn || busy) return
     // Any connect that isn't a profile click ends the profile's claim.
     activeProfile = ""
     p2pRequested = args.indexOf("--p2p") !== -1
+    quickRequested = quickKeyOf(args)
     _autoAttempt = auto === true
     _desired = 1
     _expectDown = false
@@ -943,7 +965,7 @@ Item {
                              "org.freedesktop.Notifications", "Notify", "susssasa{sv}i",
                              "OmaProton VPN", "0", notificationIconPath, summary, Model.escapeMarkup(body),
                              "0",
-                             "2", "urgency", "y", level, "omarchy-glyph", "s", "\udb82\udd9d",
+                             "2", "urgency", "y", level, "omarchy-glyph", "s", "\udb81\udc98",
                              "-1"])
   }
 
@@ -1035,11 +1057,19 @@ Item {
       profiles = Array.isArray(s.profiles) ? s.profiles.slice(0, 24).map(cleanProfile).filter(Boolean) : []
       nudgeDismissed = s.killSwitchNudgeDismissed === true
       autoConnect = s.autoConnect === true
+      countriesExpanded = s.countriesExpanded === true
+      quickExpanded = s.quickExpanded !== false
+      profilesExpanded = s.profilesExpanded !== false
+      recentsExpanded = s.recentsExpanded !== false
     } catch (e) {
       recents = []
       profiles = []
       nudgeDismissed = false
       autoConnect = false
+      countriesExpanded = false
+      quickExpanded = true
+      profilesExpanded = true
+      recentsExpanded = true
     }
     stateLoaded = true
   }
@@ -1049,8 +1079,36 @@ Item {
       recents: recents,
       profiles: profiles,
       killSwitchNudgeDismissed: nudgeDismissed,
-      autoConnect: autoConnect
+      autoConnect: autoConnect,
+      countriesExpanded: countriesExpanded,
+      quickExpanded: quickExpanded,
+      profilesExpanded: profilesExpanded,
+      recentsExpanded: recentsExpanded
     }))
+  }
+
+  function setCountriesExpanded(on) {
+    if (countriesExpanded === on) return
+    countriesExpanded = on
+    saveState()
+  }
+
+  function setQuickExpanded(on) {
+    if (quickExpanded === on) return
+    quickExpanded = on
+    saveState()
+  }
+
+  function setProfilesExpanded(on) {
+    if (profilesExpanded === on) return
+    profilesExpanded = on
+    saveState()
+  }
+
+  function setRecentsExpanded(on) {
+    if (recentsExpanded === on) return
+    recentsExpanded = on
+    saveState()
   }
 
   // ── Always On ───────────────────────────────────────────────────────────
@@ -1369,11 +1427,22 @@ Item {
     command: []
     stdout: StdioCollector { id: statusStdout; waitForEnd: true }
     stderr: StdioCollector { id: statusStderr; waitForEnd: true }
-    onExited: function(exitCode) {
+    // `protonvpn status` sometimes prints its whole answer and then dies on
+    // the way out: a worker thread in Proton's native extension is still
+    // running while the interpreter is being torn down, and the process ends
+    // on a signal after everything was written and flushed. That reaches
+    // here as a crash exit with the signal number for a code. A crash after
+    // a complete Status line is a crash of the exit path, not of the answer,
+    // so the answer is kept. A normal non-zero exit is still the CLI saying
+    // it failed, and an unfinished line, a traceback or no output at all is
+    // still an error whatever ended the process.
+    onExited: function(exitCode, exitStatus) {
       root._probeRunning = false
       Qt.callLater(root.drainProbes)
-      if (exitCode === 0) {
-        root.applyStatus(String(statusStdout.text || ""))
+      var out = String(statusStdout.text || "")
+      var crashed = exitStatus !== 0
+      if (exitCode === 0 || (crashed && Model.statusComplete(out))) {
+        root.applyStatus(out)
         root.lastError = ""
       } else {
         root.lastError = Model.elide(String(statusStderr.text || "") || "protonvpn status failed")

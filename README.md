@@ -182,8 +182,12 @@ disconnects.
 
 ### Quick connect
 
-Each row asks Proton for the **fastest server that has that feature**. You don't
-pick a country here; Proton picks the best match for you.
+The first thing on the **Connections** tab, folded behind its **QUICK
+CONNECT** header like the lists under it. Each row asks Proton for the
+**fastest server that has that feature**. You don't pick a country here;
+Proton picks the best match for you. Each row leads with a hollow glyph
+that fills in while that is the connection you're on, the way the bar icon
+fills when the tunnel is up.
 
 | Row | What you get |
 | --- | --- |
@@ -208,12 +212,13 @@ you exit from.
 
 ### Two tabs: Connections and Protection
 
-Under Quick Connect sit two tabs, in the same pill style as Omarchy's network
-panel. **Connections** holds everywhere you can go: your profiles, recent
-places, and the country and city lists. **Protection** holds everything about *how* you're
-protected: the Kill Switch, NetShield, Always On, port forwarding, split
-tunneling, and your
-account. The tab you pick stays until you close the panel.
+Under the connection details sit two tabs, in the same pill style as
+Omarchy's network panel. **Connections** holds everywhere you can go: Quick
+Connect, your profiles, recent places, and the country and city lists.
+**Protection** holds everything about *how* you're protected: the Kill
+Switch, NetShield, Always On, port forwarding, split tunneling, and your
+account. The tab you pick stays until you close the panel, and `gt` flips
+between them from the keyboard.
 
 The Protection tab has enough rules behind it to deserve its own chapter:
 [How the protections work](#how-the-protections-work).
@@ -223,6 +228,11 @@ The Protection tab has enough rules behind it to deserve its own chapter:
 A profile is a place you've named, in a colour of your theme. "Home" in green,
 "Work" in blue, "Torrents" in magenta: one click each. The row's dot wears the
 colour and the header leads with the name while you're on it.
+
+The **PROFILES** header folds the list away and brings it back, the same
+way the country header does below: click it, or press `Enter`, `→` or `←`
+on it. It shows how many profiles you have while they're hidden. The list
+starts open and stays how you left it, across opens and shell restarts.
 
 Click **New profile** and the editor opens in place of the list:
 
@@ -258,6 +268,8 @@ for every connection, so a profile doesn't change them.
 
 The last three places you connected to, pinned above the country list. Most
 people use the same two or three locations forever; this makes them one click.
+The **RECENT** header folds them away and back like the other two lists, and
+starts open.
 
 Every successful connection lands here, including **Fastest**, **Random**,
 **P2P**, **Secure Core** and **Tor**. Those don't name a destination when you
@@ -267,9 +279,16 @@ That top entry is also what Always On reconnects to.
 
 ### Connections → Countries and cities
 
-Below that is the full country list. **Clicking a country doesn't connect**,
-it drills into that country's cities, so you can see where you'll land before
-you commit.
+Below that is the full country list, folded away behind its **COUNTRIES**
+header until you want it. Most opens are a glance at the map, Fastest, a
+profile or a recent, and a hundred and fifty rows under those only push the
+panel to the edge of the screen. The header shows the count; click it, or
+press `Enter` or `→` on it, and the list opens with the filter box at its
+top. It stays open or folded the way you left it, across opens and shell
+restarts, and `/` opens it for you on the way to the filter.
+
+**Clicking a country doesn't connect**, it drills into that country's cities,
+so you can see where you'll land before you commit.
 
 <img src="docs/city-list.png" width="360" alt="Connections tab with Japan drilled open, Osaka, clicked on the map, is ringed">
 
@@ -333,26 +352,37 @@ under the header for a few seconds.
 
 ### Keyboard
 
-Everything in the panel is reachable without a mouse.
+Everything in the panel is reachable without a mouse, and the keys are Vim's.
 
 | Key | What it does |
 | --- | --- |
-| `↑` `↓` or `k` `j` | Move through every section, top to bottom |
-| `→` or `l` | Open the selected country's city list |
-| `←` or `h` | Back out to the country list |
-| `Enter` | Activate: connect, flip a switch, open a picker |
-| `Esc` | Back out one level, then close the panel |
-| `/` | Jump to the country filter |
+| `j` `k` or `↓` `↑` | Move through every section, top to bottom |
+| `l` or `→` | Open the selected country's city list, unfold a list from its header, or on the tab row move to Protection |
+| `h` or `←` | Back out to the country list, fold a list from its header, or on the tab row move to Connections |
+| `Enter` or `Space` | Activate: connect, flip a switch, open a picker, fold or unfold a list from its header |
+| `gg` / `G` | Jump to the top of the panel / the last row |
+| `{` / `}` | Jump to the previous / next section |
+| `Ctrl-u` / `Ctrl-d` | Move five rows up / down |
+| `za` | Fold or unfold the list the selection is in |
+| `zo` / `zc` | Unfold / fold that list |
+| `zR` / `zM` | Unfold / fold every list |
+| `gt` / `gT` | Next / previous tab, from anywhere in the panel |
+| `/` | Jump to the country filter, unfolding the list if it was folded |
 | `e` | Edit the selected profile |
+| `q` | Close the panel |
+| `Esc` | Back out one level, then close the panel |
 
+`g` and `z` are prefixes, as in Vim: they wait a second for their second key.
 There are no single-letter shortcuts that touch the tunnel, on purpose: the
 panel takes keyboard focus when it opens, and a stray keystroke should never
-change your connection. `e` only opens the editor for the profile under the
+change your connection. The letters move the selection, fold lists, switch
+tabs or close the panel; `e` only opens the editor for the profile under the
 selection, which changes nothing until you save.
 
-Inside the profile editor, `↑` `↓` move between the fields, `←` `→` walk the
-colour swatches, `Enter` puts the cursor in the name or opens a picker, and
-`Enter` in the name field saves.
+Inside the profile editor, `j` `k` move between the fields, `h` `l` walk the
+colour swatches and, on the last row, pick Save, Cancel or Delete. `Enter`
+puts the cursor in the name or opens a picker, `Enter` in the name field
+saves, and `Esc` cancels.
 
 `Enter` on **Mode** or **Apps** opens that picker, which then owns the
 keyboard: inside the Apps list, typing filters it, arrows move, `Enter` ticks,

@@ -17,13 +17,12 @@ Panel {
   // name, a row count, and its own index property; sectionList() says which
   // ones exist right now.
   property string focusSection: "header"
-  // Which of the two tabs under Quick Connect is showing.
+  // Which of the two tabs is showing.
   property string tab: "connections"
   readonly property var tabs: [
     { key: "connections", label: "Connections" },
     { key: "protection", label: "Protection" }
   ]
-  property int tabIndex: 0
   property int nudgeIndex: 0
   property int quickIndex: 0
   property int protectionIndex: 0
@@ -148,10 +147,14 @@ Panel {
   // "random", "country:CC" or "server:NAME"; `serverOption` is the dropdown
   // row for a named server, which the country list can't supply.
   property var draft: null
-  readonly property var editorRows: draft === null ? []
-                                    : (draft.isNew ? ["name", "color", "where", "feature", "save", "cancel"]
-                                                   : ["name", "color", "where", "feature", "save", "cancel", "delete"])
+  // The buttons are one row of the walk: h and l pick Save, Cancel or
+  // Delete along it, the way they pick a colour swatch.
+  readonly property var editorRows: draft === null ? [] : ["name", "color", "where", "feature", "buttons"]
   readonly property string editorRow: draft !== null && editorIndex < editorRows.length ? editorRows[editorIndex] : ""
+  readonly property var editorButtons: draft === null ? [] : (draft.isNew ? ["save", "cancel"] : ["save", "cancel", "delete"])
+  property int editorButtonIndex: 0
+  readonly property string editorButton: editorRow === "buttons" && editorButtonIndex < editorButtons.length
+                                         ? editorButtons[editorButtonIndex] : ""
   readonly property var featureOptions: [
     { value: "", label: "None" },
     { value: "p2p", label: "P2P" },
@@ -213,6 +216,7 @@ Panel {
     nameField.text = profile ? profile.name : ""
     draft = d
     editorIndex = 0
+    editorButtonIndex = 0
     cursorActive = true
     focusSection = "editor"
     Qt.callLater(function() { if (nameField.visible) nameField.forceActiveFocus() })
@@ -258,18 +262,45 @@ Panel {
     else if (row === "color") cycleColor(1)
     else if (row === "where") whereRow.toggle()
     else if (row === "feature") { if (featureRow.enabled) featureRow.toggle() }
-    else if (row === "save") saveDraft()
-    else if (row === "cancel") closeEditor(draft.id)
-    else if (row === "delete") deleteDraft()
+    else if (row === "buttons") {
+      if (editorButton === "save") saveDraft()
+      else if (editorButton === "cancel") closeEditor(draft.id)
+      else if (editorButton === "delete") deleteDraft()
+    }
   }
 
+  function hoverEditorButton(index) {
+    if (!pointerMoved) return
+    editorButtonIndex = index
+    setCursor("editor", 4)
+  }
+
+  function stepEditorButton(step) {
+    editorButtonIndex = Math.max(0, Math.min(editorButtons.length - 1, editorButtonIndex + step))
+  }
+
+  // Each row leads with a glyph in the foreground: hollow and dim until
+  // that is the connection you are on, then filled and full, the way the
+  // bar icon fills when the tunnel is up. Filled / outline pairs from the
+  // Nerd Font's Material set: lightning bolt, share (the P2P glyph the
+  // header shows), a plain shield for Secure Core (the header shows the
+  // same), eye off. Shuffle has no filled twin, so Random only changes
+  // weight, which is all the bar icon does too.
   readonly property var quickActions: [
-    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false },
-    { key: "random", label: "Random", hint: "Any available server", plus: false },
-    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true },
-    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true },
-    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true }
+    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb85\udc0b", outline: "\udb85\udc0c" },
+    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udc9f", outline: "\udb81\udc9f" },
+    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", outline: "\udb85\udd14" },
+    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb81\udc98", outline: "\udb81\udc99" },
+    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb80\ude09", outline: "\udb81\uded1" }
   ]
+
+  // Whether a Quick Connect row is the connection you are on. Secure Core
+  // can be read off the server name too, so it survives a shell restart.
+  function quickActive(key) {
+    if (!vpn.connected) return false
+    if (key === "securecore" && Model.isSecureCore(vpn.displayServer)) return true
+    return vpn.quickRequested === key
+  }
 
   readonly property var filteredCountries: Model.filterCountries(vpn.countries, filterQuery)
 
@@ -288,7 +319,7 @@ Panel {
       // The feature you asked for, then the server: two hops deserve saying
       // so, and a P2P click should visibly have landed.
       var meta = server
-      if (Model.isSecureCore(vpn.displayServer)) meta = "\udb82\udd9d Secure Core · " + server
+      if (Model.isSecureCore(vpn.displayServer)) meta = "\udb81\udc98 Secure Core · " + server
       else if (vpn.p2pRequested && vpn.currentP2p) meta = "\udb81\udc97 P2P · " + server
       // Through a profile, the name you gave the place leads.
       var prof = vpn.activeProfileEntry
@@ -314,25 +345,37 @@ Panel {
     if (!vpn.signedIn) return [{ name: "signin", count: 1 }]
     var list = [{ name: "header", count: 1 }]
     if (nudgeVisible) list.push({ name: "nudge", count: 2 })
-    list.push({ name: "quick", count: quickActions.length })
-    list.push({ name: "tabs", count: tabs.length })
+    // The tab strip is one row: h and l pick the tab, the way they pick
+    // a colour swatch in the editor.
+    list.push({ name: "tabs", count: 1 })
     if (tab === "protection") {
       list.push({ name: "protection", count: protectionCount })
     } else {
-      // The profile rows plus the "New profile" row, or the editor's rows
-      // while one is open.
+      // Each list's header is a row of its own: it folds the list. The
+      // profile rows carry a "New profile" row at the end, and the editor
+      // takes the profile list's place, header and all.
+      list.push({ name: "quickHeader", count: 1 })
+      if (vpn.quickExpanded) list.push({ name: "quick", count: quickActions.length })
       if (draft !== null) list.push({ name: "editor", count: editorRows.length })
-      else list.push({ name: "profiles", count: vpn.profiles.length + 1 })
-      if (vpn.recents.length > 0) list.push({ name: "recents", count: vpn.recents.length })
+      else {
+        list.push({ name: "profilesHeader", count: 1 })
+        if (vpn.profilesExpanded) list.push({ name: "profiles", count: vpn.profiles.length + 1 })
+      }
+      if (vpn.recents.length > 0) {
+        list.push({ name: "recentsHeader", count: 1 })
+        if (vpn.recentsExpanded) list.push({ name: "recents", count: vpn.recents.length })
+      }
       if (drilled) list.push({ name: "servers", count: serverRowCount })
-      else if (filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
+      else {
+        list.push({ name: "countriesHeader", count: 1 })
+        if (vpn.countriesExpanded && filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
+      }
     }
     return list
   }
 
   function sectionIndex(name) {
     if (name === "nudge") return nudgeIndex
-    if (name === "tabs") return tabIndex
     if (name === "quick") return quickIndex
     if (name === "protection") return protectionIndex
     if (name === "profiles") return profileIndex
@@ -345,7 +388,6 @@ Panel {
 
   function setSectionIndex(name, value) {
     if (name === "nudge") nudgeIndex = value
-    else if (name === "tabs") tabIndex = value
     else if (name === "quick") quickIndex = value
     else if (name === "protection") protectionIndex = value
     else if (name === "profiles") profileIndex = value
@@ -361,9 +403,14 @@ Panel {
     var pos = -1
     for (var i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
     if (pos === -1) {
-      // Countries and servers stand in for each other across a drill.
+      // Countries and servers stand in for each other across a drill, and
+      // a folded list hands its cursor to the header that folded it.
       if (focusSection === "countries" && drilled) focusSection = "servers"
-      else if (focusSection === "servers" && !drilled) focusSection = "countries"
+      else if (focusSection === "servers" && !drilled) focusSection = vpn.countriesExpanded ? "countries" : "countriesHeader"
+      else if (focusSection === "countries") focusSection = "countriesHeader"
+      else if (focusSection === "quick") focusSection = "quickHeader"
+      else if (focusSection === "profiles") focusSection = "profilesHeader"
+      else if (focusSection === "recents") focusSection = "recentsHeader"
       else focusSection = list[0].name
       for (i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
       if (pos === -1) { focusSection = list[0].name; pos = 0 }
@@ -438,9 +485,20 @@ Panel {
     // Horizontal moves drill in and out of a country's server list. In the
     // editor they walk the colour swatches.
     if (dx !== 0) {
-      if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
+      if (focusSection === "editor") {
+        if (editorRow === "color") cycleColor(dx)
+        else if (editorRow === "buttons") stepEditorButton(dx)
+        return
+      }
+      if (focusSection === "tabs") { stepTab(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
+      // On a header they unfold and fold its list, the way they open and
+      // close a country.
+      else if (focusSection === "quickHeader") setQuickExpanded(dx > 0)
+      else if (focusSection === "profilesHeader") setProfilesExpanded(dx > 0)
+      else if (focusSection === "recentsHeader") setRecentsExpanded(dx > 0)
+      else if (focusSection === "countriesHeader") setCountriesExpanded(dx > 0)
       return
     }
     if (dy === 0) return
@@ -472,8 +530,8 @@ Panel {
     else if (focusSection === "signin") submitSignIn()
     else if (focusSection === "header") vpn.toggle()
     else if (focusSection === "nudge") { if (nudgeIndex === 0) requestKillSwitch(); else vpn.dismissNudge() }
+    else if (focusSection === "quickHeader") setQuickExpanded(!vpn.quickExpanded)
     else if (focusSection === "quick") runQuick(quickActions[quickIndex].key)
-    else if (focusSection === "tabs") setTab(tabs[tabIndex].key)
     else if (focusSection === "protection") {
       if (protectionIndex === 0) requestKillSwitch()
       else if (protectionIndex === 1) vpn.toggleNetShield()
@@ -484,17 +542,170 @@ Panel {
       else if (splitDetailVisible && protectionIndex === 6) splitAppsRow.toggle()
       else requestSignOut()
     }
+    else if (focusSection === "profilesHeader") setProfilesExpanded(!vpn.profilesExpanded)
     else if (focusSection === "profiles") {
       if (profileIndex < vpn.profiles.length) { vpn.connectProfile(vpn.profiles[profileIndex].id); showConnection() }
       else openEditor(null)
     }
     else if (focusSection === "editor") activateEditorRow()
+    else if (focusSection === "recentsHeader") setRecentsExpanded(!vpn.recentsExpanded)
     else if (focusSection === "recents") { vpn.connectRecent(recentIndex); showConnection() }
     // Enter on a country opens its servers rather than connecting blind,
     // the first row inside is still "Fastest in <country>", so the old
     // one-keystroke behaviour is only ever one row away.
+    else if (focusSection === "countriesHeader") setCountriesExpanded(!vpn.countriesExpanded)
     else if (focusSection === "countries") drillInto(filteredCountries[countryIndex])
     else if (focusSection === "servers") activateServerRow(serverIndex)
+  }
+
+  // The country list stays folded until asked for, and stays how it was
+  // left, across opens and shell restarts. Unfolding puts its header at the
+  // top of the view, the way a drill does, so the rows fill the panel.
+  function setCountriesExpanded(on) {
+    if (vpn.countriesExpanded === on) return
+    vpn.setCountriesExpanded(on)
+    if (on) anchorCountrySection()
+  }
+
+  // Quick Connect, Profiles and Recent fold the same way, but sit near the
+  // top of the panel and hold a handful of rows, so unfolding them moves
+  // nothing.
+  function setQuickExpanded(on) { vpn.setQuickExpanded(on) }
+  function setProfilesExpanded(on) { vpn.setProfilesExpanded(on) }
+  function setRecentsExpanded(on) { vpn.setRecentsExpanded(on) }
+
+  // ── Vim motions ─────────────────────────────────────────────────────────
+  // The shell's key catcher already turns hjkl and the arrows into moves;
+  // the rest of the vocabulary lands here as single letters. "g" and "z"
+  // are prefixes and wait a beat for their second key, the way Vim does.
+  property string pendingKey: ""
+  readonly property int pageRows: 5
+
+  Timer {
+    id: pendingTimer
+    interval: 1000
+    onTriggered: root.pendingKey = ""
+  }
+
+  function clearPending() {
+    pendingKey = ""
+    pendingTimer.stop()
+  }
+
+  function textKey(t) {
+    if (openDialog) { clearPending(); return }
+    var pending = pendingKey
+    clearPending()
+    if (pending === "g") {
+      if (t === "g") jumpTop()
+      else if (t === "t") stepTab(1)
+      else if (t === "T") stepTab(-1)
+      return
+    }
+    if (pending === "z") {
+      if (t === "a") foldUnderCursor("toggle")
+      else if (t === "o") foldUnderCursor("open")
+      else if (t === "c") foldUnderCursor("close")
+      else if (t === "R") setAllFolds(true)
+      else if (t === "M") setAllFolds(false)
+      return
+    }
+    if (t === "g" || t === "z") { pendingKey = t; pendingTimer.restart(); return }
+    // The filter lives inside the list, so "/" unfolds it first.
+    if (t === "/") { setCountriesExpanded(true); filterField.forceActiveFocus() }
+    else if (t === "G") jumpBottom()
+    else if (t === "{") jumpSection(-1)
+    else if (t === "}") jumpSection(1)
+    // Ctrl-d and Ctrl-u arrive as the control characters they are.
+    else if (t === "\u0004") moveRows(pageRows)
+    else if (t === "\u0015") moveRows(-pageRows)
+    else if (t === "q") close()
+    else if (t === "e" && cursorActive && focusSection === "profiles"
+             && profileIndex < vpn.profiles.length) openEditor(vpn.profiles[profileIndex])
+  }
+
+  function jumpTop() {
+    cursorActive = true
+    focusSection = "header"
+    ensureCursor()
+    anchorPending = false
+    if (panelFlick) panelFlick.contentY = 0
+  }
+
+  function jumpBottom() {
+    cursorActive = true
+    var list = sectionList()
+    var last = list[list.length - 1]
+    focusSection = last.name
+    setSectionIndex(last.name, last.count - 1)
+    ensureCursor()
+    anchorPending = false
+    scrollCursorIntoView()
+  }
+
+  // "{" and "}" step a whole section at a time, landing on its first row.
+  function jumpSection(step) {
+    cursorActive = true
+    ensureCursor()
+    var list = sectionList()
+    var pos = 0
+    for (var i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
+    var next = Math.max(0, Math.min(list.length - 1, pos + step))
+    focusSection = list[next].name
+    setSectionIndex(focusSection, 0)
+    anchorPending = false
+    if (focusSection === "header") { if (panelFlick) panelFlick.contentY = 0 }
+    else scrollCursorIntoView()
+  }
+
+  function moveRows(n) {
+    var step = n > 0 ? 1 : -1
+    for (var i = 0; i < Math.abs(n); i++) moveCursor(0, step)
+  }
+
+  // Which fold a section belongs to: its header row or the rows under it.
+  function foldOf(section) {
+    if (section === "quickHeader" || section === "quick") return "quick"
+    if (section === "profilesHeader" || section === "profiles") return "profiles"
+    if (section === "recentsHeader" || section === "recents") return "recents"
+    if (section === "countriesHeader" || section === "countries") return "countries"
+    return ""
+  }
+
+  function foldExpanded(name) {
+    if (name === "quick") return vpn.quickExpanded
+    if (name === "profiles") return vpn.profilesExpanded
+    if (name === "recents") return vpn.recentsExpanded
+    return vpn.countriesExpanded
+  }
+
+  function setFold(name, on) {
+    if (name === "quick") setQuickExpanded(on)
+    else if (name === "profiles") setProfilesExpanded(on)
+    else if (name === "recents") setRecentsExpanded(on)
+    else if (name === "countries") setCountriesExpanded(on)
+  }
+
+  // za, zo, zc: the fold the cursor is in, whether on its header or a row
+  // under it. Folding from inside hands the cursor to the header.
+  function foldUnderCursor(mode) {
+    cursorActive = true
+    ensureCursor()
+    var f = foldOf(focusSection)
+    if (f === "") return
+    var on = mode === "toggle" ? !foldExpanded(f) : mode === "open"
+    setFold(f, on)
+    ensureCursor()
+    scrollCursorIntoView()
+  }
+
+  // zR and zM: every fold at once.
+  function setAllFolds(on) {
+    cursorActive = true
+    var names = ["quick", "profiles", "recents", "countries"]
+    for (var i = 0; i < names.length; i++) setFold(names[i], on)
+    ensureCursor()
+    scrollCursorIntoView()
   }
 
   function activateServerRow(index) {
@@ -559,11 +770,19 @@ Panel {
 
   Timer { id: signOutArm; interval: 5000; onTriggered: root.signOutArmed = false }
 
+  // l and h on the tab row, gt and gT anywhere: the next tab along, and
+  // the strip stops at its ends.
+  function stepTab(step) {
+    var i = 0
+    for (var k = 0; k < tabs.length; k++) if (tabs[k].key === tab) i = k
+    var next = Math.max(0, Math.min(tabs.length - 1, i + step))
+    if (next !== i) setTab(tabs[next].key)
+  }
+
   function setTab(key) {
     if (key !== "protection" && key !== "connections") return
     clearHighlight()
     tab = key
-    tabIndex = key === "connections" ? 0 : 1
     anchorPending = false
     ensureCursor()
   }
@@ -598,19 +817,23 @@ Panel {
   function scrollCursorIntoView() {
     var column = null
     if (focusSection === "nudge") column = nudgeButtons
+    else if (focusSection === "quickHeader") column = quickSection
     else if (focusSection === "quick") column = quickColumn
     else if (focusSection === "tabs") column = tabRow
     else if (focusSection === "protection") column = protectionColumn
+    else if (focusSection === "profilesHeader") column = profileSection
     else if (focusSection === "profiles") column = profileColumn
     else if (focusSection === "editor") column = editorColumn
+    else if (focusSection === "recentsHeader") column = recentSection
     else if (focusSection === "recents") column = recentColumn
+    else if (focusSection === "countriesHeader") column = countrySection
     else if (focusSection === "countries") column = countryColumn
     else if (focusSection === "servers") column = serverColumn
     var i = sectionIndex(focusSection)
     // "New profile" is the last child of its column, after the Repeater.
     if (focusSection === "profiles" && i >= vpn.profiles.length && column) i = column.children.length - 1
-    // The editor's three buttons share one row.
-    if (focusSection === "editor") i = Math.min(i, 4)
+    // The editor's buttons share one row, the last child of its column.
+    if (focusSection === "editor" && i === 4 && column) i = column.children.length - 1
     // The Protection column carries the Account header and rows after its
     // switches; the sign-out row is its last child wherever the cursor for it
     // has ended up.
@@ -708,7 +931,13 @@ Panel {
         portForwarding: vpn.config["port-forwarding"] || "",
         forwardedPort: vpn.forwardedPort,
         countries: vpn.countries.length,
+        countriesExpanded: vpn.countriesExpanded,
+        quickExpanded: vpn.quickExpanded,
+        quickRequested: vpn.quickRequested,
+        profiles: vpn.profiles.length,
+        profilesExpanded: vpn.profilesExpanded,
         recents: vpn.recents.length,
+        recentsExpanded: vpn.recentsExpanded,
         cities: vpn.cities.length,
         traffic: { device: vpn.linkDevice, samples: vpn.rxHistory.length, rx: vpn.rxRate, tx: vpn.txRate },
         currentPlace: vpn.currentPlace ? vpn.currentPlace.city + ", " + vpn.currentPlace.code : "",
@@ -780,10 +1009,12 @@ Panel {
           root.openDialog.selectedIndex = root.openDialog.selectedIndex === 0 ? 1 : 0
           return
         }
+        root.clearPending()
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
       }
       onActivateRequested: {
+        root.clearPending()
         if (root.openDialog) {
           if (root.openDialog.selectedIndex === 0) root.openDialog.canceled()
           else root.openDialog.confirmed()
@@ -802,12 +1033,9 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       // No single-letter actions on the tunnel, on purpose: the panel takes
       // keyboard focus when it opens, and a stray keystroke must never change
-      // it. "e" only opens the editor for the profile under the cursor.
-      onTextKey: function(t) {
-        if (t === "/") filterField.forceActiveFocus()
-        else if (t === "e" && root.cursorActive && root.focusSection === "profiles"
-                 && root.profileIndex < vpn.profiles.length) root.openEditor(vpn.profiles[root.profileIndex])
-      }
+      // it. The letters move the cursor, fold lists, switch tabs or close the
+      // panel; "e" only opens the editor for the profile under the cursor.
+      onTextKey: function(t) { root.textKey(t) }
 
       // What counts as the pointer actually moving. A row sliding under a
       // still pointer reports a hover but moves no pointer, and this is how
@@ -1160,50 +1388,6 @@ Panel {
             foreground: root.foreground
           }
 
-          // ── Quick connect ───────────────────────────────────────────────
-          Column {
-            visible: vpn.signedIn
-            width: parent.width
-            spacing: Style.space(10)
-
-            PanelSectionHeader {
-              text: "QUICK CONNECT"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Column {
-              id: quickColumn
-              width: parent.width
-              spacing: Style.space(6)
-
-              Repeater {
-                model: root.quickActions
-                ActionRow {
-                  required property var modelData
-                  required property int index
-                  width: quickColumn.width
-                  hasCursor: root.cursorActive && root.focusSection === "quick" && root.quickIndex === index
-                  title: modelData.label
-                  subtitle: modelData.hint
-                  // Secure Core gets an ACTIVE tag; P2P doesn't, since most
-                  // servers permit it and the header already says when you
-                  // asked for it.
-                  trailing: modelData.key === "securecore" && vpn.connected && Model.isSecureCore(vpn.displayServer)
-                            ? "ACTIVE" : (modelData.plus ? "PLUS" : "")
-                  enabled: !vpn.busy
-                  onEntered: root.setCursorFromHover("quick", index)
-                  onClicked: root.runQuick(modelData.key)
-                }
-              }
-            }
-          }
-
-          PanelSeparator {
-            visible: vpn.signedIn
-            foreground: root.foreground
-          }
-
           // ── Tabs ────────────────────────────────────────────────────────
           // Same pill strip as the network panel's DNS provider row.
           Row {
@@ -1221,7 +1405,53 @@ Panel {
                 width: tabRow.cellWidth
                 tabKey: modelData.key
                 text: modelData.label
-                tabIdx: index
+              }
+            }
+          }
+
+          // ── Quick connect ───────────────────────────────────────────────
+          // First thing on the Connections tab, folded behind its header
+          // like the lists under it.
+          Column {
+            id: quickSection
+            visible: vpn.signedIn && root.tab === "connections"
+            width: parent.width
+            spacing: Style.space(10)
+
+            FoldHeader {
+              section: "quickHeader"
+              title: "QUICK CONNECT"
+              count: root.quickActions.length
+              expanded: vpn.quickExpanded
+              onToggled: root.setQuickExpanded(!vpn.quickExpanded)
+            }
+
+            Column {
+              id: quickColumn
+              visible: vpn.quickExpanded
+              width: parent.width
+              spacing: Style.space(6)
+
+              Repeater {
+                model: root.quickActions
+                ActionRow {
+                  required property var modelData
+                  required property int index
+                  width: quickColumn.width
+                  hasCursor: root.cursorActive && root.focusSection === "quick" && root.quickIndex === index
+                  icon: root.quickActive(modelData.key) ? modelData.icon : modelData.outline
+                  iconColor: root.quickActive(modelData.key) ? root.foreground : root.dim
+                  title: modelData.label
+                  subtitle: modelData.hint
+                  // Secure Core gets an ACTIVE tag; P2P doesn't, since most
+                  // servers permit it and the header already says when you
+                  // asked for it.
+                  trailing: modelData.key === "securecore" && vpn.connected && Model.isSecureCore(vpn.displayServer)
+                            ? "ACTIVE" : (modelData.plus ? "PLUS" : "")
+                  enabled: !vpn.busy
+                  onEntered: root.setCursorFromHover("quick", index)
+                  onClicked: root.runQuick(modelData.key)
+                }
               }
             }
           }
@@ -1304,6 +1534,7 @@ Panel {
               }
 
               Toggle {
+                id: portForwardRow
                 width: parent.width
                 label: "Port forwarding"
                 description: {
@@ -1322,6 +1553,10 @@ Panel {
                 fontFamily: root.fontFamily
                 onHovered: function(on) { if (on) root.setCursorFromHover("protection", 3) }
                 onClicked: { root.clearHighlight(); root.requestPortForwarding() }
+
+                // Needs a paid plan, like NetShield: the same tag, on the
+                // label's line, so a free account isn't told by a refusal.
+                LabelTag { row: portForwardRow; text: "PLUS" }
               }
 
 
@@ -1436,19 +1671,24 @@ Panel {
           // Named places in the theme's colours, above Recent. The editor
           // takes the list's place while a profile is being written.
           Column {
+            id: profileSection
             visible: vpn.signedIn && root.tab === "connections"
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: root.draft === null ? "PROFILES" : (root.draft.isNew ? "NEW PROFILE" : "EDIT PROFILE")
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            // While the editor is open the header is only its title.
+            FoldHeader {
+              section: "profilesHeader"
+              title: root.draft === null ? "PROFILES" : (root.draft.isNew ? "NEW PROFILE" : "EDIT PROFILE")
+              count: vpn.profiles.length
+              expanded: vpn.profilesExpanded
+              active: root.draft === null
+              onToggled: root.setProfilesExpanded(!vpn.profilesExpanded)
             }
 
             Column {
               id: profileColumn
-              visible: root.draft === null
+              visible: root.draft === null && vpn.profilesExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1603,16 +1843,16 @@ Panel {
                     text: "Save"
                     bordered: true
                     foreground: root.foreground
-                    hasCursor: root.cursorActive && root.editorRow === "save"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 4) }
+                    hasCursor: root.cursorActive && root.editorButton === "save"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(0) }
                     onClicked: root.saveDraft()
                   }
 
                   Button {
                     text: "Cancel"
                     foreground: root.dim
-                    hasCursor: root.cursorActive && root.editorRow === "cancel"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 5) }
+                    hasCursor: root.cursorActive && root.editorButton === "cancel"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(1) }
                     onClicked: root.closeEditor(root.draft !== null ? root.draft.id : "")
                   }
 
@@ -1620,8 +1860,8 @@ Panel {
                     visible: root.draft !== null && !root.draft.isNew
                     text: "Delete"
                     foreground: root.urgent
-                    hasCursor: root.cursorActive && root.editorRow === "delete"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 6) }
+                    hasCursor: root.cursorActive && root.editorButton === "delete"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(2) }
                     onClicked: root.deleteDraft()
                   }
                 }
@@ -1631,18 +1871,22 @@ Panel {
 
           // ── Recent ──────────────────────────────────────────────────────
           Column {
+            id: recentSection
             visible: vpn.signedIn && root.tab === "connections" && vpn.recents.length > 0
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: "RECENT"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            FoldHeader {
+              section: "recentsHeader"
+              title: "RECENT"
+              count: vpn.recents.length
+              expanded: vpn.recentsExpanded
+              onToggled: root.setRecentsExpanded(!vpn.recentsExpanded)
             }
 
             Column {
               id: recentColumn
+              visible: vpn.recentsExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1670,11 +1914,15 @@ Panel {
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
-              textFormat: Text.PlainText
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            // Inside a drill the header is only the country's name, with
+            // nothing to click.
+            FoldHeader {
+              section: "countriesHeader"
+              title: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
+              count: vpn.countriesLoaded ? vpn.countries.length : -1
+              expanded: vpn.countriesExpanded
+              active: !root.drilled
+              onToggled: { root.clearHighlight(); root.setCountriesExpanded(!vpn.countriesExpanded) }
             }
 
             BackRow {
@@ -1715,7 +1963,7 @@ Panel {
 
             TextField {
               id: filterField
-              visible: !root.drilled
+              visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               foreground: root.foreground
               placeholderText: vpn.countriesLoaded ? "Filter countries  (press /)" : "Loading countries…"
@@ -1742,7 +1990,7 @@ Panel {
             }
 
             Text {
-              visible: !root.drilled && vpn.countriesLoaded && root.filteredCountries.length === 0
+              visible: !root.drilled && vpn.countriesExpanded && vpn.countriesLoaded && root.filteredCountries.length === 0
               width: parent.width
               text: "No countries match."
               color: root.dim
@@ -1753,7 +2001,7 @@ Panel {
 
             Column {
               id: countryColumn
-              visible: !root.drilled
+              visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1777,6 +2025,70 @@ Panel {
   // A clickable row: optional icon, title + subtitle, optional trailing tag.
   // Used for install, sign-in, quick connect, and recents so they all read
   // the same way.
+  // A section header that is a row of its own: it folds the rows under it
+  // away and unfolds them, carries their count, and a chevron says which way
+  // it goes. It hangs out past the column by a row's inset so its title
+  // stays in line with the plain section headers while its cursor ring reads
+  // like every other row's. With `active` off it is only a title.
+  component FoldHeader: CursorSurface {
+    id: foldHeader
+    property string section: ""
+    property string title: ""
+    // Below zero hides the count, for a list that has not loaded yet.
+    property int count: -1
+    property bool expanded: true
+    property bool active: true
+    signal toggled()
+
+    x: -Style.space(10)
+    width: parent.width + Style.space(20)
+    hasCursor: active && root.cursorActive && root.focusSection === section
+    foreground: root.foreground
+    implicitHeight: foldLabel.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      enabled: foldHeader.active
+      cursorShape: Qt.PointingHandCursor
+      onEntered: root.setCursorFromHover(foldHeader.section, 0)
+      onClicked: foldHeader.toggled()
+    }
+
+    PanelSectionHeader {
+      id: foldLabel
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      text: foldHeader.title
+      textFormat: Text.PlainText
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
+    Text {
+      anchors.left: foldLabel.right
+      anchors.leftMargin: Style.space(8)
+      anchors.verticalCenter: foldLabel.verticalCenter
+      visible: foldHeader.active && foldHeader.count >= 0
+      text: String(foldHeader.count)
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: foldLabel.verticalCenter
+      visible: foldHeader.active
+      text: foldHeader.expanded ? "\udb80\udd40" : "\udb80\udd42"
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+  }
+
   component ActionRow: CursorSurface {
     id: actionRow
     property string icon: ""
@@ -1952,7 +2264,6 @@ Panel {
   component TabPill: Button {
     id: pill
     property string tabKey: ""
-    property int tabIdx: 0
 
     fontSize: Style.font.bodySmall
     foreground: root.foreground
@@ -1961,9 +2272,11 @@ Panel {
     verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
     bordered: true
     active: root.tab === tabKey
-    hasCursor: root.cursorActive && root.focusSection === "tabs" && root.tabIndex === tabIdx
+    // The ring sits on the tab that is showing: the row is one cursor stop
+    // and h and l move it.
+    hasCursor: root.cursorActive && root.focusSection === "tabs" && root.tab === tabKey
 
-    onHovered: function(isHovered) { if (isHovered) root.setCursorFromHover("tabs", pill.tabIdx) }
+    onHovered: function(isHovered) { if (isHovered) root.setCursorFromHover("tabs", 0) }
     onClicked: root.setTab(tabKey)   // setTab clears the highlight
   }
 
