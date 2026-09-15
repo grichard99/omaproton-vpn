@@ -965,7 +965,7 @@ Item {
                              "org.freedesktop.Notifications", "Notify", "susssasa{sv}i",
                              "OmaProton VPN", "0", notificationIconPath, summary, Model.escapeMarkup(body),
                              "0",
-                             "2", "urgency", "y", level, "omarchy-glyph", "s", "\udb82\udd9d",
+                             "2", "urgency", "y", level, "omarchy-glyph", "s", "\udb80\udf28",
                              "-1"])
   }
 
