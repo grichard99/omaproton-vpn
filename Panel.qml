@@ -321,12 +321,19 @@ Panel {
     } else {
       // The profile rows plus the "New profile" row, or the editor's rows
       // while one is open.
+      // Each list's header is a row of its own: it folds the list. The
+      // editor takes the profile list's place, header and all.
       if (draft !== null) list.push({ name: "editor", count: editorRows.length })
-      else list.push({ name: "profiles", count: vpn.profiles.length + 1 })
-      if (vpn.recents.length > 0) list.push({ name: "recents", count: vpn.recents.length })
+      else {
+        list.push({ name: "profilesHeader", count: 1 })
+        if (vpn.profilesExpanded) list.push({ name: "profiles", count: vpn.profiles.length + 1 })
+      }
+      if (vpn.recents.length > 0) {
+        list.push({ name: "recentsHeader", count: 1 })
+        if (vpn.recentsExpanded) list.push({ name: "recents", count: vpn.recents.length })
+      }
       if (drilled) list.push({ name: "servers", count: serverRowCount })
       else {
-        // The COUNTRIES header is a row of its own: it folds the list.
         list.push({ name: "countriesHeader", count: 1 })
         if (vpn.countriesExpanded && filteredCountries.length > 0) list.push({ name: "countries", count: filteredCountries.length })
       }
@@ -370,6 +377,8 @@ Panel {
       if (focusSection === "countries" && drilled) focusSection = "servers"
       else if (focusSection === "servers" && !drilled) focusSection = vpn.countriesExpanded ? "countries" : "countriesHeader"
       else if (focusSection === "countries") focusSection = "countriesHeader"
+      else if (focusSection === "profiles") focusSection = "profilesHeader"
+      else if (focusSection === "recents") focusSection = "recentsHeader"
       else focusSection = list[0].name
       for (i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
       if (pos === -1) { focusSection = list[0].name; pos = 0 }
@@ -447,8 +456,10 @@ Panel {
       if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
-      // On the header they unfold and fold the list, the way they open and
+      // On a header they unfold and fold its list, the way they open and
       // close a country.
+      else if (focusSection === "profilesHeader") setProfilesExpanded(dx > 0)
+      else if (focusSection === "recentsHeader") setRecentsExpanded(dx > 0)
       else if (focusSection === "countriesHeader") setCountriesExpanded(dx > 0)
       return
     }
@@ -493,11 +504,13 @@ Panel {
       else if (splitDetailVisible && protectionIndex === 6) splitAppsRow.toggle()
       else requestSignOut()
     }
+    else if (focusSection === "profilesHeader") setProfilesExpanded(!vpn.profilesExpanded)
     else if (focusSection === "profiles") {
       if (profileIndex < vpn.profiles.length) { vpn.connectProfile(vpn.profiles[profileIndex].id); showConnection() }
       else openEditor(null)
     }
     else if (focusSection === "editor") activateEditorRow()
+    else if (focusSection === "recentsHeader") setRecentsExpanded(!vpn.recentsExpanded)
     else if (focusSection === "recents") { vpn.connectRecent(recentIndex); showConnection() }
     // Enter on a country opens its servers rather than connecting blind,
     // the first row inside is still "Fastest in <country>", so the old
@@ -515,6 +528,11 @@ Panel {
     vpn.setCountriesExpanded(on)
     if (on) anchorCountrySection()
   }
+
+  // Profiles and Recent fold the same way, but sit near the top of the
+  // panel and hold a handful of rows, so unfolding them moves nothing.
+  function setProfilesExpanded(on) { vpn.setProfilesExpanded(on) }
+  function setRecentsExpanded(on) { vpn.setRecentsExpanded(on) }
 
   function activateServerRow(index) {
     if (index <= 0) {
@@ -620,8 +638,10 @@ Panel {
     else if (focusSection === "quick") column = quickColumn
     else if (focusSection === "tabs") column = tabRow
     else if (focusSection === "protection") column = protectionColumn
+    else if (focusSection === "profilesHeader") column = profileSection
     else if (focusSection === "profiles") column = profileColumn
     else if (focusSection === "editor") column = editorColumn
+    else if (focusSection === "recentsHeader") column = recentSection
     else if (focusSection === "recents") column = recentColumn
     else if (focusSection === "countriesHeader") column = countrySection
     else if (focusSection === "countries") column = countryColumn
@@ -729,7 +749,10 @@ Panel {
         forwardedPort: vpn.forwardedPort,
         countries: vpn.countries.length,
         countriesExpanded: vpn.countriesExpanded,
+        profiles: vpn.profiles.length,
+        profilesExpanded: vpn.profilesExpanded,
         recents: vpn.recents.length,
+        recentsExpanded: vpn.recentsExpanded,
         cities: vpn.cities.length,
         traffic: { device: vpn.linkDevice, samples: vpn.rxHistory.length, rx: vpn.rxRate, tx: vpn.txRate },
         currentPlace: vpn.currentPlace ? vpn.currentPlace.city + ", " + vpn.currentPlace.code : "",
@@ -1463,19 +1486,24 @@ Panel {
           // Named places in the theme's colours, above Recent. The editor
           // takes the list's place while a profile is being written.
           Column {
+            id: profileSection
             visible: vpn.signedIn && root.tab === "connections"
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: root.draft === null ? "PROFILES" : (root.draft.isNew ? "NEW PROFILE" : "EDIT PROFILE")
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            // While the editor is open the header is only its title.
+            FoldHeader {
+              section: "profilesHeader"
+              title: root.draft === null ? "PROFILES" : (root.draft.isNew ? "NEW PROFILE" : "EDIT PROFILE")
+              count: vpn.profiles.length
+              expanded: vpn.profilesExpanded
+              active: root.draft === null
+              onToggled: root.setProfilesExpanded(!vpn.profilesExpanded)
             }
 
             Column {
               id: profileColumn
-              visible: root.draft === null
+              visible: root.draft === null && vpn.profilesExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1658,18 +1686,22 @@ Panel {
 
           // ── Recent ──────────────────────────────────────────────────────
           Column {
+            id: recentSection
             visible: vpn.signedIn && root.tab === "connections" && vpn.recents.length > 0
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: "RECENT"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            FoldHeader {
+              section: "recentsHeader"
+              title: "RECENT"
+              count: vpn.recents.length
+              expanded: vpn.recentsExpanded
+              onToggled: root.setRecentsExpanded(!vpn.recentsExpanded)
             }
 
             Column {
               id: recentColumn
+              visible: vpn.recentsExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1697,60 +1729,15 @@ Panel {
             width: parent.width
             spacing: Style.space(10)
 
-            // The header is a row: it folds the list away and unfolds it,
-            // and carries the count while the rows are hidden. It hangs out
-            // past the column by a row's inset so its title stays in line
-            // with the other section headers. Inside a drill it is only the
-            // country's name, with nothing to click.
-            CursorSurface {
-              id: countriesHeader
-              x: -Style.space(10)
-              width: parent.width + Style.space(20)
-              hasCursor: !root.drilled && root.cursorActive && root.focusSection === "countriesHeader"
-              foreground: root.foreground
-              implicitHeight: headerLabel.implicitHeight + Style.space(10)
-
-              MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                enabled: !root.drilled
-                cursorShape: Qt.PointingHandCursor
-                onEntered: root.setCursorFromHover("countriesHeader", 0)
-                onClicked: { root.clearHighlight(); root.setCountriesExpanded(!vpn.countriesExpanded) }
-              }
-
-              PanelSectionHeader {
-                id: headerLabel
-                anchors.left: parent.left
-                anchors.leftMargin: Style.space(10)
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
-                textFormat: Text.PlainText
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-              }
-
-              Text {
-                anchors.left: headerLabel.right
-                anchors.leftMargin: Style.space(8)
-                anchors.verticalCenter: headerLabel.verticalCenter
-                visible: !root.drilled && vpn.countriesLoaded
-                text: String(vpn.countries.length)
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
-
-              Text {
-                anchors.right: parent.right
-                anchors.rightMargin: Style.space(10)
-                anchors.verticalCenter: headerLabel.verticalCenter
-                visible: !root.drilled
-                text: vpn.countriesExpanded ? "\udb80\udd40" : "\udb80\udd42"
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-              }
+            // Inside a drill the header is only the country's name, with
+            // nothing to click.
+            FoldHeader {
+              section: "countriesHeader"
+              title: root.drilled ? String(vpn.serversCountryName).toUpperCase() : "COUNTRIES"
+              count: vpn.countriesLoaded ? vpn.countries.length : -1
+              expanded: vpn.countriesExpanded
+              active: !root.drilled
+              onToggled: { root.clearHighlight(); root.setCountriesExpanded(!vpn.countriesExpanded) }
             }
 
             BackRow {
@@ -1853,6 +1840,70 @@ Panel {
   // A clickable row: optional icon, title + subtitle, optional trailing tag.
   // Used for install, sign-in, quick connect, and recents so they all read
   // the same way.
+  // A section header that is a row of its own: it folds the rows under it
+  // away and unfolds them, carries their count, and a chevron says which way
+  // it goes. It hangs out past the column by a row's inset so its title
+  // stays in line with the plain section headers while its cursor ring reads
+  // like every other row's. With `active` off it is only a title.
+  component FoldHeader: CursorSurface {
+    id: foldHeader
+    property string section: ""
+    property string title: ""
+    // Below zero hides the count, for a list that has not loaded yet.
+    property int count: -1
+    property bool expanded: true
+    property bool active: true
+    signal toggled()
+
+    x: -Style.space(10)
+    width: parent.width + Style.space(20)
+    hasCursor: active && root.cursorActive && root.focusSection === section
+    foreground: root.foreground
+    implicitHeight: foldLabel.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      enabled: foldHeader.active
+      cursorShape: Qt.PointingHandCursor
+      onEntered: root.setCursorFromHover(foldHeader.section, 0)
+      onClicked: foldHeader.toggled()
+    }
+
+    PanelSectionHeader {
+      id: foldLabel
+      anchors.left: parent.left
+      anchors.leftMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      text: foldHeader.title
+      textFormat: Text.PlainText
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
+    Text {
+      anchors.left: foldLabel.right
+      anchors.leftMargin: Style.space(8)
+      anchors.verticalCenter: foldLabel.verticalCenter
+      visible: foldHeader.active && foldHeader.count >= 0
+      text: String(foldHeader.count)
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+    }
+
+    Text {
+      anchors.right: parent.right
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: foldLabel.verticalCenter
+      visible: foldHeader.active
+      text: foldHeader.expanded ? "\udb80\udd40" : "\udb80\udd42"
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+  }
+
   component ActionRow: CursorSurface {
     id: actionRow
     property string icon: ""
