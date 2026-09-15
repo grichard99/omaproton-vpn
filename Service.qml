@@ -664,12 +664,27 @@ Item {
   // clicked. Not persisted; after a restart the header shows the name.
   property bool p2pRequested: false
   readonly property bool currentP2p: !!(currentPlace && currentPlace.p2p === true)
+  // Which Quick Connect row the current connection was asked with, or ""
+  // for a named place: that row's glyph fills in while you are on it. A
+  // feature-only profile counts as its row. Not persisted, like the above.
+  property string quickRequested: ""
+
+  function quickKeyOf(args) {
+    var a = args || []
+    for (var i = 0; i < a.length; i++) if (String(a[i]).charAt(0) !== "-") return ""
+    if (a.indexOf("--p2p") !== -1) return "p2p"
+    if (a.indexOf("--securecore") !== -1) return "securecore"
+    if (a.indexOf("--tor") !== -1) return "tor"
+    if (a.indexOf("--random") !== -1) return "random"
+    return "fastest"
+  }
 
   function connectTo(args, label, target, auto) {
     if (!installed || !signedIn || busy) return
     // Any connect that isn't a profile click ends the profile's claim.
     activeProfile = ""
     p2pRequested = args.indexOf("--p2p") !== -1
+    quickRequested = quickKeyOf(args)
     _autoAttempt = auto === true
     _desired = 1
     _expectDown = false

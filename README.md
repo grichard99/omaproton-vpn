@@ -185,8 +185,9 @@ disconnects.
 The first thing on the **Connections** tab, folded behind its **QUICK
 CONNECT** header like the lists under it. Each row asks Proton for the
 **fastest server that has that feature**. You don't pick a country here;
-Proton picks the best match for you. Each row leads with a glyph in one of
-your theme's colours, so they change with the theme like the profile dots.
+Proton picks the best match for you. Each row leads with a hollow glyph
+that fills in while that is the connection you're on, the way the bar icon
+fills when the tunnel is up.
 
 | Row | What you get |
 | --- | --- |
