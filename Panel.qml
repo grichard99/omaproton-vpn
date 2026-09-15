@@ -17,7 +17,7 @@ Panel {
   // name, a row count, and its own index property; sectionList() says which
   // ones exist right now.
   property string focusSection: "header"
-  // Which of the two tabs under Quick Connect is showing.
+  // Which of the two tabs is showing.
   property string tab: "connections"
   readonly property var tabs: [
     { key: "connections", label: "Connections" },
@@ -314,15 +314,15 @@ Panel {
     if (!vpn.signedIn) return [{ name: "signin", count: 1 }]
     var list = [{ name: "header", count: 1 }]
     if (nudgeVisible) list.push({ name: "nudge", count: 2 })
-    list.push({ name: "quick", count: quickActions.length })
     list.push({ name: "tabs", count: tabs.length })
     if (tab === "protection") {
       list.push({ name: "protection", count: protectionCount })
     } else {
-      // The profile rows plus the "New profile" row, or the editor's rows
-      // while one is open.
       // Each list's header is a row of its own: it folds the list. The
-      // editor takes the profile list's place, header and all.
+      // profile rows carry a "New profile" row at the end, and the editor
+      // takes the profile list's place, header and all.
+      list.push({ name: "quickHeader", count: 1 })
+      if (vpn.quickExpanded) list.push({ name: "quick", count: quickActions.length })
       if (draft !== null) list.push({ name: "editor", count: editorRows.length })
       else {
         list.push({ name: "profilesHeader", count: 1 })
@@ -377,6 +377,7 @@ Panel {
       if (focusSection === "countries" && drilled) focusSection = "servers"
       else if (focusSection === "servers" && !drilled) focusSection = vpn.countriesExpanded ? "countries" : "countriesHeader"
       else if (focusSection === "countries") focusSection = "countriesHeader"
+      else if (focusSection === "quick") focusSection = "quickHeader"
       else if (focusSection === "profiles") focusSection = "profilesHeader"
       else if (focusSection === "recents") focusSection = "recentsHeader"
       else focusSection = list[0].name
@@ -458,6 +459,7 @@ Panel {
       else if (dx < 0 && focusSection === "servers") drillOut()
       // On a header they unfold and fold its list, the way they open and
       // close a country.
+      else if (focusSection === "quickHeader") setQuickExpanded(dx > 0)
       else if (focusSection === "profilesHeader") setProfilesExpanded(dx > 0)
       else if (focusSection === "recentsHeader") setRecentsExpanded(dx > 0)
       else if (focusSection === "countriesHeader") setCountriesExpanded(dx > 0)
@@ -492,6 +494,7 @@ Panel {
     else if (focusSection === "signin") submitSignIn()
     else if (focusSection === "header") vpn.toggle()
     else if (focusSection === "nudge") { if (nudgeIndex === 0) requestKillSwitch(); else vpn.dismissNudge() }
+    else if (focusSection === "quickHeader") setQuickExpanded(!vpn.quickExpanded)
     else if (focusSection === "quick") runQuick(quickActions[quickIndex].key)
     else if (focusSection === "tabs") setTab(tabs[tabIndex].key)
     else if (focusSection === "protection") {
@@ -529,10 +532,145 @@ Panel {
     if (on) anchorCountrySection()
   }
 
-  // Profiles and Recent fold the same way, but sit near the top of the
-  // panel and hold a handful of rows, so unfolding them moves nothing.
+  // Quick Connect, Profiles and Recent fold the same way, but sit near the
+  // top of the panel and hold a handful of rows, so unfolding them moves
+  // nothing.
+  function setQuickExpanded(on) { vpn.setQuickExpanded(on) }
   function setProfilesExpanded(on) { vpn.setProfilesExpanded(on) }
   function setRecentsExpanded(on) { vpn.setRecentsExpanded(on) }
+
+  // ── Vim motions ─────────────────────────────────────────────────────────
+  // The shell's key catcher already turns hjkl and the arrows into moves;
+  // the rest of the vocabulary lands here as single letters. "g" and "z"
+  // are prefixes and wait a beat for their second key, the way Vim does.
+  property string pendingKey: ""
+  readonly property int pageRows: 5
+
+  Timer {
+    id: pendingTimer
+    interval: 1000
+    onTriggered: root.pendingKey = ""
+  }
+
+  function clearPending() {
+    pendingKey = ""
+    pendingTimer.stop()
+  }
+
+  function textKey(t) {
+    if (openDialog) { clearPending(); return }
+    var pending = pendingKey
+    clearPending()
+    if (pending === "g") {
+      if (t === "g") jumpTop()
+      else if (t === "t" || t === "T") setTab(tab === "connections" ? "protection" : "connections")
+      return
+    }
+    if (pending === "z") {
+      if (t === "a") foldUnderCursor("toggle")
+      else if (t === "o") foldUnderCursor("open")
+      else if (t === "c") foldUnderCursor("close")
+      else if (t === "R") setAllFolds(true)
+      else if (t === "M") setAllFolds(false)
+      return
+    }
+    if (t === "g" || t === "z") { pendingKey = t; pendingTimer.restart(); return }
+    // The filter lives inside the list, so "/" unfolds it first.
+    if (t === "/") { setCountriesExpanded(true); filterField.forceActiveFocus() }
+    else if (t === "G") jumpBottom()
+    else if (t === "{") jumpSection(-1)
+    else if (t === "}") jumpSection(1)
+    // Ctrl-d and Ctrl-u arrive as the control characters they are.
+    else if (t === "\u0004") moveRows(pageRows)
+    else if (t === "\u0015") moveRows(-pageRows)
+    else if (t === "q") close()
+    else if (t === "e" && cursorActive && focusSection === "profiles"
+             && profileIndex < vpn.profiles.length) openEditor(vpn.profiles[profileIndex])
+  }
+
+  function jumpTop() {
+    cursorActive = true
+    focusSection = "header"
+    ensureCursor()
+    anchorPending = false
+    if (panelFlick) panelFlick.contentY = 0
+  }
+
+  function jumpBottom() {
+    cursorActive = true
+    var list = sectionList()
+    var last = list[list.length - 1]
+    focusSection = last.name
+    setSectionIndex(last.name, last.count - 1)
+    ensureCursor()
+    anchorPending = false
+    scrollCursorIntoView()
+  }
+
+  // "{" and "}" step a whole section at a time, landing on its first row.
+  function jumpSection(step) {
+    cursorActive = true
+    ensureCursor()
+    var list = sectionList()
+    var pos = 0
+    for (var i = 0; i < list.length; i++) if (list[i].name === focusSection) pos = i
+    var next = Math.max(0, Math.min(list.length - 1, pos + step))
+    focusSection = list[next].name
+    setSectionIndex(focusSection, 0)
+    anchorPending = false
+    if (focusSection === "header") { if (panelFlick) panelFlick.contentY = 0 }
+    else scrollCursorIntoView()
+  }
+
+  function moveRows(n) {
+    var step = n > 0 ? 1 : -1
+    for (var i = 0; i < Math.abs(n); i++) moveCursor(0, step)
+  }
+
+  // Which fold a section belongs to: its header row or the rows under it.
+  function foldOf(section) {
+    if (section === "quickHeader" || section === "quick") return "quick"
+    if (section === "profilesHeader" || section === "profiles") return "profiles"
+    if (section === "recentsHeader" || section === "recents") return "recents"
+    if (section === "countriesHeader" || section === "countries") return "countries"
+    return ""
+  }
+
+  function foldExpanded(name) {
+    if (name === "quick") return vpn.quickExpanded
+    if (name === "profiles") return vpn.profilesExpanded
+    if (name === "recents") return vpn.recentsExpanded
+    return vpn.countriesExpanded
+  }
+
+  function setFold(name, on) {
+    if (name === "quick") setQuickExpanded(on)
+    else if (name === "profiles") setProfilesExpanded(on)
+    else if (name === "recents") setRecentsExpanded(on)
+    else if (name === "countries") setCountriesExpanded(on)
+  }
+
+  // za, zo, zc: the fold the cursor is in, whether on its header or a row
+  // under it. Folding from inside hands the cursor to the header.
+  function foldUnderCursor(mode) {
+    cursorActive = true
+    ensureCursor()
+    var f = foldOf(focusSection)
+    if (f === "") return
+    var on = mode === "toggle" ? !foldExpanded(f) : mode === "open"
+    setFold(f, on)
+    ensureCursor()
+    scrollCursorIntoView()
+  }
+
+  // zR and zM: every fold at once.
+  function setAllFolds(on) {
+    cursorActive = true
+    var names = ["quick", "profiles", "recents", "countries"]
+    for (var i = 0; i < names.length; i++) setFold(names[i], on)
+    ensureCursor()
+    scrollCursorIntoView()
+  }
 
   function activateServerRow(index) {
     if (index <= 0) {
@@ -635,6 +773,7 @@ Panel {
   function scrollCursorIntoView() {
     var column = null
     if (focusSection === "nudge") column = nudgeButtons
+    else if (focusSection === "quickHeader") column = quickSection
     else if (focusSection === "quick") column = quickColumn
     else if (focusSection === "tabs") column = tabRow
     else if (focusSection === "protection") column = protectionColumn
@@ -749,6 +888,7 @@ Panel {
         forwardedPort: vpn.forwardedPort,
         countries: vpn.countries.length,
         countriesExpanded: vpn.countriesExpanded,
+        quickExpanded: vpn.quickExpanded,
         profiles: vpn.profiles.length,
         profilesExpanded: vpn.profilesExpanded,
         recents: vpn.recents.length,
@@ -824,10 +964,12 @@ Panel {
           root.openDialog.selectedIndex = root.openDialog.selectedIndex === 0 ? 1 : 0
           return
         }
+        root.clearPending()
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
       }
       onActivateRequested: {
+        root.clearPending()
         if (root.openDialog) {
           if (root.openDialog.selectedIndex === 0) root.openDialog.canceled()
           else root.openDialog.confirmed()
@@ -846,13 +988,9 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       // No single-letter actions on the tunnel, on purpose: the panel takes
       // keyboard focus when it opens, and a stray keystroke must never change
-      // it. "e" only opens the editor for the profile under the cursor.
-      onTextKey: function(t) {
-        // The filter lives inside the list, so "/" unfolds it first.
-        if (t === "/") { root.setCountriesExpanded(true); filterField.forceActiveFocus() }
-        else if (t === "e" && root.cursorActive && root.focusSection === "profiles"
-                 && root.profileIndex < vpn.profiles.length) root.openEditor(vpn.profiles[root.profileIndex])
-      }
+      // it. The letters move the cursor, fold lists, switch tabs or close the
+      // panel; "e" only opens the editor for the profile under the cursor.
+      onTextKey: function(t) { root.textKey(t) }
 
       // What counts as the pointer actually moving. A row sliding under a
       // still pointer reports a hover but moves no pointer, and this is how
@@ -1205,20 +1343,48 @@ Panel {
             foreground: root.foreground
           }
 
-          // ── Quick connect ───────────────────────────────────────────────
-          Column {
+          // ── Tabs ────────────────────────────────────────────────────────
+          // Same pill strip as the network panel's DNS provider row.
+          Row {
+            id: tabRow
             visible: vpn.signedIn
+            width: parent.width
+            spacing: Style.space(6)
+            readonly property real cellWidth: (width - spacing * (root.tabs.length - 1)) / root.tabs.length
+
+            Repeater {
+              model: root.tabs
+              TabPill {
+                required property var modelData
+                required property int index
+                width: tabRow.cellWidth
+                tabKey: modelData.key
+                text: modelData.label
+                tabIdx: index
+              }
+            }
+          }
+
+          // ── Quick connect ───────────────────────────────────────────────
+          // First thing on the Connections tab, folded behind its header
+          // like the lists under it.
+          Column {
+            id: quickSection
+            visible: vpn.signedIn && root.tab === "connections"
             width: parent.width
             spacing: Style.space(10)
 
-            PanelSectionHeader {
-              text: "QUICK CONNECT"
-              foreground: root.foreground
-              fontFamily: root.fontFamily
+            FoldHeader {
+              section: "quickHeader"
+              title: "QUICK CONNECT"
+              count: root.quickActions.length
+              expanded: vpn.quickExpanded
+              onToggled: root.setQuickExpanded(!vpn.quickExpanded)
             }
 
             Column {
               id: quickColumn
+              visible: vpn.quickExpanded
               width: parent.width
               spacing: Style.space(6)
 
@@ -1240,33 +1406,6 @@ Panel {
                   onEntered: root.setCursorFromHover("quick", index)
                   onClicked: root.runQuick(modelData.key)
                 }
-              }
-            }
-          }
-
-          PanelSeparator {
-            visible: vpn.signedIn
-            foreground: root.foreground
-          }
-
-          // ── Tabs ────────────────────────────────────────────────────────
-          // Same pill strip as the network panel's DNS provider row.
-          Row {
-            id: tabRow
-            visible: vpn.signedIn
-            width: parent.width
-            spacing: Style.space(6)
-            readonly property real cellWidth: (width - spacing * (root.tabs.length - 1)) / root.tabs.length
-
-            Repeater {
-              model: root.tabs
-              TabPill {
-                required property var modelData
-                required property int index
-                width: tabRow.cellWidth
-                tabKey: modelData.key
-                text: modelData.label
-                tabIdx: index
               }
             }
           }

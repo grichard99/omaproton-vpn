@@ -182,8 +182,10 @@ disconnects.
 
 ### Quick connect
 
-Each row asks Proton for the **fastest server that has that feature**. You don't
-pick a country here; Proton picks the best match for you.
+The first thing on the **Connections** tab, folded behind its **QUICK
+CONNECT** header like the lists under it. Each row asks Proton for the
+**fastest server that has that feature**. You don't pick a country here;
+Proton picks the best match for you.
 
 | Row | What you get |
 | --- | --- |
@@ -208,12 +210,13 @@ you exit from.
 
 ### Two tabs: Connections and Protection
 
-Under Quick Connect sit two tabs, in the same pill style as Omarchy's network
-panel. **Connections** holds everywhere you can go: your profiles, recent
-places, and the country and city lists. **Protection** holds everything about *how* you're
-protected: the Kill Switch, NetShield, Always On, port forwarding, split
-tunneling, and your
-account. The tab you pick stays until you close the panel.
+Under the connection details sit two tabs, in the same pill style as
+Omarchy's network panel. **Connections** holds everywhere you can go: Quick
+Connect, your profiles, recent places, and the country and city lists.
+**Protection** holds everything about *how* you're protected: the Kill
+Switch, NetShield, Always On, port forwarding, split tunneling, and your
+account. The tab you pick stays until you close the panel, and `gt` flips
+between them from the keyboard.
 
 The Protection tab has enough rules behind it to deserve its own chapter:
 [How the protections work](#how-the-protections-work).
@@ -347,21 +350,31 @@ under the header for a few seconds.
 
 ### Keyboard
 
-Everything in the panel is reachable without a mouse.
+Everything in the panel is reachable without a mouse, and the keys are Vim's.
 
 | Key | What it does |
 | --- | --- |
-| `↑` `↓` or `k` `j` | Move through every section, top to bottom |
-| `→` or `l` | Open the selected country's city list, or unfold a list from its header |
-| `←` or `h` | Back out to the country list, or fold a list from its header |
-| `Enter` | Activate: connect, flip a switch, open a picker, fold or unfold a list from its header |
-| `Esc` | Back out one level, then close the panel |
+| `j` `k` or `↓` `↑` | Move through every section, top to bottom |
+| `l` or `→` | Open the selected country's city list, or unfold a list from its header |
+| `h` or `←` | Back out to the country list, or fold a list from its header |
+| `Enter` or `Space` | Activate: connect, flip a switch, open a picker, fold or unfold a list from its header |
+| `gg` / `G` | Jump to the top of the panel / the last row |
+| `{` / `}` | Jump to the previous / next section |
+| `Ctrl-u` / `Ctrl-d` | Move five rows up / down |
+| `za` | Fold or unfold the list the selection is in |
+| `zo` / `zc` | Unfold / fold that list |
+| `zR` / `zM` | Unfold / fold every list |
+| `gt` / `gT` | Switch between the Connections and Protection tabs |
 | `/` | Jump to the country filter, unfolding the list if it was folded |
 | `e` | Edit the selected profile |
+| `q` | Close the panel |
+| `Esc` | Back out one level, then close the panel |
 
+`g` and `z` are prefixes, as in Vim: they wait a second for their second key.
 There are no single-letter shortcuts that touch the tunnel, on purpose: the
 panel takes keyboard focus when it opens, and a stray keystroke should never
-change your connection. `e` only opens the editor for the profile under the
+change your connection. The letters move the selection, fold lists, switch
+tabs or close the panel; `e` only opens the editor for the profile under the
 selection, which changes nothing until you save.
 
 Inside the profile editor, `↑` `↓` move between the fields, `←` `→` walk the
