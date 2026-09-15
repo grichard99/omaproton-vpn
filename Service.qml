@@ -136,9 +136,12 @@ Item {
   // kill-switch nudge was dismissed. Location labels only, nothing secret.
   property var recents: []
   property bool nudgeDismissed: false
-  // The Connections tab's country list is folded away until asked for, and
-  // stays however it was last left.
+  // The Connections tab's lists fold behind their headers and stay however
+  // they were last left. Countries start folded, it is a hundred and fifty
+  // rows; Profiles and Recent are the quick picks, so they start open.
   property bool countriesExpanded: false
+  property bool profilesExpanded: true
+  property bool recentsExpanded: true
   property bool stateLoaded: false
 
   // ── Profiles ────────────────────────────────────────────────────────────
@@ -1039,12 +1042,16 @@ Item {
       nudgeDismissed = s.killSwitchNudgeDismissed === true
       autoConnect = s.autoConnect === true
       countriesExpanded = s.countriesExpanded === true
+      profilesExpanded = s.profilesExpanded !== false
+      recentsExpanded = s.recentsExpanded !== false
     } catch (e) {
       recents = []
       profiles = []
       nudgeDismissed = false
       autoConnect = false
       countriesExpanded = false
+      profilesExpanded = true
+      recentsExpanded = true
     }
     stateLoaded = true
   }
@@ -1055,13 +1062,27 @@ Item {
       profiles: profiles,
       killSwitchNudgeDismissed: nudgeDismissed,
       autoConnect: autoConnect,
-      countriesExpanded: countriesExpanded
+      countriesExpanded: countriesExpanded,
+      profilesExpanded: profilesExpanded,
+      recentsExpanded: recentsExpanded
     }))
   }
 
   function setCountriesExpanded(on) {
     if (countriesExpanded === on) return
     countriesExpanded = on
+    saveState()
+  }
+
+  function setProfilesExpanded(on) {
+    if (profilesExpanded === on) return
+    profilesExpanded = on
+    saveState()
+  }
+
+  function setRecentsExpanded(on) {
+    if (recentsExpanded === on) return
+    recentsExpanded = on
     saveState()
   }
 

@@ -224,6 +224,11 @@ A profile is a place you've named, in a colour of your theme. "Home" in green,
 "Work" in blue, "Torrents" in magenta: one click each. The row's dot wears the
 colour and the header leads with the name while you're on it.
 
+The **PROFILES** header folds the list away and brings it back, the same
+way the country header does below: click it, or press `Enter`, `→` or `←`
+on it. It shows how many profiles you have while they're hidden. The list
+starts open and stays how you left it, across opens and shell restarts.
+
 Click **New profile** and the editor opens in place of the list:
 
 | Field | What it takes |
@@ -258,6 +263,8 @@ for every connection, so a profile doesn't change them.
 
 The last three places you connected to, pinned above the country list. Most
 people use the same two or three locations forever; this makes them one click.
+The **RECENT** header folds them away and back like the other two lists, and
+starts open.
 
 Every successful connection lands here, including **Fastest**, **Random**,
 **P2P**, **Secure Core** and **Tor**. Those don't name a destination when you
@@ -345,9 +352,9 @@ Everything in the panel is reachable without a mouse.
 | Key | What it does |
 | --- | --- |
 | `↑` `↓` or `k` `j` | Move through every section, top to bottom |
-| `→` or `l` | Open the selected country's city list, or unfold the country list from its header |
-| `←` or `h` | Back out to the country list, or fold it from its header |
-| `Enter` | Activate: connect, flip a switch, open a picker, fold or unfold the country list |
+| `→` or `l` | Open the selected country's city list, or unfold a list from its header |
+| `←` or `h` | Back out to the country list, or fold a list from its header |
+| `Enter` | Activate: connect, flip a switch, open a picker, fold or unfold a list from its header |
 | `Esc` | Back out one level, then close the panel |
 | `/` | Jump to the country filter, unfolding the list if it was folded |
 | `e` | Edit the selected profile |
