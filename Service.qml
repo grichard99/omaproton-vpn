@@ -140,6 +140,7 @@ Item {
   // they were last left. Countries start folded, it is a hundred and fifty
   // rows; Profiles and Recent are the quick picks, so they start open.
   property bool countriesExpanded: false
+  property bool quickExpanded: true
   property bool profilesExpanded: true
   property bool recentsExpanded: true
   property bool stateLoaded: false
@@ -1042,6 +1043,7 @@ Item {
       nudgeDismissed = s.killSwitchNudgeDismissed === true
       autoConnect = s.autoConnect === true
       countriesExpanded = s.countriesExpanded === true
+      quickExpanded = s.quickExpanded !== false
       profilesExpanded = s.profilesExpanded !== false
       recentsExpanded = s.recentsExpanded !== false
     } catch (e) {
@@ -1050,6 +1052,7 @@ Item {
       nudgeDismissed = false
       autoConnect = false
       countriesExpanded = false
+      quickExpanded = true
       profilesExpanded = true
       recentsExpanded = true
     }
@@ -1063,6 +1066,7 @@ Item {
       killSwitchNudgeDismissed: nudgeDismissed,
       autoConnect: autoConnect,
       countriesExpanded: countriesExpanded,
+      quickExpanded: quickExpanded,
       profilesExpanded: profilesExpanded,
       recentsExpanded: recentsExpanded
     }))
@@ -1071,6 +1075,12 @@ Item {
   function setCountriesExpanded(on) {
     if (countriesExpanded === on) return
     countriesExpanded = on
+    saveState()
+  }
+
+  function setQuickExpanded(on) {
+    if (quickExpanded === on) return
+    quickExpanded = on
     saveState()
   }
 
