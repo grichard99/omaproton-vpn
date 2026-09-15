@@ -377,9 +377,10 @@ change your connection. The letters move the selection, fold lists, switch
 tabs or close the panel; `e` only opens the editor for the profile under the
 selection, which changes nothing until you save.
 
-Inside the profile editor, `↑` `↓` move between the fields, `←` `→` walk the
-colour swatches, `Enter` puts the cursor in the name or opens a picker, and
-`Enter` in the name field saves.
+Inside the profile editor, `j` `k` move between the fields, `h` `l` walk the
+colour swatches and, on the last row, pick Save, Cancel or Delete. `Enter`
+puts the cursor in the name or opens a picker, `Enter` in the name field
+saves, and `Esc` cancels.
 
 `Enter` on **Mode** or **Apps** opens that picker, which then owns the
 keyboard: inside the Apps list, typing filters it, arrows move, `Enter` ticks,

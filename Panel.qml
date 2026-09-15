@@ -147,10 +147,14 @@ Panel {
   // "random", "country:CC" or "server:NAME"; `serverOption` is the dropdown
   // row for a named server, which the country list can't supply.
   property var draft: null
-  readonly property var editorRows: draft === null ? []
-                                    : (draft.isNew ? ["name", "color", "where", "feature", "save", "cancel"]
-                                                   : ["name", "color", "where", "feature", "save", "cancel", "delete"])
+  // The buttons are one row of the walk: h and l pick Save, Cancel or
+  // Delete along it, the way they pick a colour swatch.
+  readonly property var editorRows: draft === null ? [] : ["name", "color", "where", "feature", "buttons"]
   readonly property string editorRow: draft !== null && editorIndex < editorRows.length ? editorRows[editorIndex] : ""
+  readonly property var editorButtons: draft === null ? [] : (draft.isNew ? ["save", "cancel"] : ["save", "cancel", "delete"])
+  property int editorButtonIndex: 0
+  readonly property string editorButton: editorRow === "buttons" && editorButtonIndex < editorButtons.length
+                                         ? editorButtons[editorButtonIndex] : ""
   readonly property var featureOptions: [
     { value: "", label: "None" },
     { value: "p2p", label: "P2P" },
@@ -212,6 +216,7 @@ Panel {
     nameField.text = profile ? profile.name : ""
     draft = d
     editorIndex = 0
+    editorButtonIndex = 0
     cursorActive = true
     focusSection = "editor"
     Qt.callLater(function() { if (nameField.visible) nameField.forceActiveFocus() })
@@ -257,9 +262,21 @@ Panel {
     else if (row === "color") cycleColor(1)
     else if (row === "where") whereRow.toggle()
     else if (row === "feature") { if (featureRow.enabled) featureRow.toggle() }
-    else if (row === "save") saveDraft()
-    else if (row === "cancel") closeEditor(draft.id)
-    else if (row === "delete") deleteDraft()
+    else if (row === "buttons") {
+      if (editorButton === "save") saveDraft()
+      else if (editorButton === "cancel") closeEditor(draft.id)
+      else if (editorButton === "delete") deleteDraft()
+    }
+  }
+
+  function hoverEditorButton(index) {
+    if (!pointerMoved) return
+    editorButtonIndex = index
+    setCursor("editor", 4)
+  }
+
+  function stepEditorButton(step) {
+    editorButtonIndex = Math.max(0, Math.min(editorButtons.length - 1, editorButtonIndex + step))
   }
 
   readonly property var quickActions: [
@@ -453,7 +470,11 @@ Panel {
     // Horizontal moves drill in and out of a country's server list. In the
     // editor they walk the colour swatches.
     if (dx !== 0) {
-      if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
+      if (focusSection === "editor") {
+        if (editorRow === "color") cycleColor(dx)
+        else if (editorRow === "buttons") stepEditorButton(dx)
+        return
+      }
       if (focusSection === "tabs") { stepTab(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
@@ -796,8 +817,8 @@ Panel {
     var i = sectionIndex(focusSection)
     // "New profile" is the last child of its column, after the Repeater.
     if (focusSection === "profiles" && i >= vpn.profiles.length && column) i = column.children.length - 1
-    // The editor's three buttons share one row.
-    if (focusSection === "editor") i = Math.min(i, 4)
+    // The editor's buttons share one row, the last child of its column.
+    if (focusSection === "editor" && i === 4 && column) i = column.children.length - 1
     // The Protection column carries the Account header and rows after its
     // switches; the sign-out row is its last child wherever the cursor for it
     // has ended up.
@@ -1804,16 +1825,16 @@ Panel {
                     text: "Save"
                     bordered: true
                     foreground: root.foreground
-                    hasCursor: root.cursorActive && root.editorRow === "save"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 4) }
+                    hasCursor: root.cursorActive && root.editorButton === "save"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(0) }
                     onClicked: root.saveDraft()
                   }
 
                   Button {
                     text: "Cancel"
                     foreground: root.dim
-                    hasCursor: root.cursorActive && root.editorRow === "cancel"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 5) }
+                    hasCursor: root.cursorActive && root.editorButton === "cancel"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(1) }
                     onClicked: root.closeEditor(root.draft !== null ? root.draft.id : "")
                   }
 
@@ -1821,8 +1842,8 @@ Panel {
                     visible: root.draft !== null && !root.draft.isNew
                     text: "Delete"
                     foreground: root.urgent
-                    hasCursor: root.cursorActive && root.editorRow === "delete"
-                    onHovered: function(on) { if (on) root.setCursorFromHover("editor", 6) }
+                    hasCursor: root.cursorActive && root.editorButton === "delete"
+                    onHovered: function(on) { if (on) root.hoverEditorButton(2) }
                     onClicked: root.deleteDraft()
                   }
                 }
