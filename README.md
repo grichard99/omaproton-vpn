@@ -355,8 +355,8 @@ Everything in the panel is reachable without a mouse, and the keys are Vim's.
 | Key | What it does |
 | --- | --- |
 | `j` `k` or `↓` `↑` | Move through every section, top to bottom |
-| `l` or `→` | Open the selected country's city list, or unfold a list from its header |
-| `h` or `←` | Back out to the country list, or fold a list from its header |
+| `l` or `→` | Open the selected country's city list, unfold a list from its header, or on the tab row move to Protection |
+| `h` or `←` | Back out to the country list, fold a list from its header, or on the tab row move to Connections |
 | `Enter` or `Space` | Activate: connect, flip a switch, open a picker, fold or unfold a list from its header |
 | `gg` / `G` | Jump to the top of the panel / the last row |
 | `{` / `}` | Jump to the previous / next section |
@@ -364,7 +364,7 @@ Everything in the panel is reachable without a mouse, and the keys are Vim's.
 | `za` | Fold or unfold the list the selection is in |
 | `zo` / `zc` | Unfold / fold that list |
 | `zR` / `zM` | Unfold / fold every list |
-| `gt` / `gT` | Switch between the Connections and Protection tabs |
+| `gt` / `gT` | Next / previous tab, from anywhere in the panel |
 | `/` | Jump to the country filter, unfolding the list if it was folded |
 | `e` | Edit the selected profile |
 | `q` | Close the panel |

@@ -23,7 +23,6 @@ Panel {
     { key: "connections", label: "Connections" },
     { key: "protection", label: "Protection" }
   ]
-  property int tabIndex: 0
   property int nudgeIndex: 0
   property int quickIndex: 0
   property int protectionIndex: 0
@@ -314,7 +313,9 @@ Panel {
     if (!vpn.signedIn) return [{ name: "signin", count: 1 }]
     var list = [{ name: "header", count: 1 }]
     if (nudgeVisible) list.push({ name: "nudge", count: 2 })
-    list.push({ name: "tabs", count: tabs.length })
+    // The tab strip is one row: h and l pick the tab, the way they pick
+    // a colour swatch in the editor.
+    list.push({ name: "tabs", count: 1 })
     if (tab === "protection") {
       list.push({ name: "protection", count: protectionCount })
     } else {
@@ -343,7 +344,6 @@ Panel {
 
   function sectionIndex(name) {
     if (name === "nudge") return nudgeIndex
-    if (name === "tabs") return tabIndex
     if (name === "quick") return quickIndex
     if (name === "protection") return protectionIndex
     if (name === "profiles") return profileIndex
@@ -356,7 +356,6 @@ Panel {
 
   function setSectionIndex(name, value) {
     if (name === "nudge") nudgeIndex = value
-    else if (name === "tabs") tabIndex = value
     else if (name === "quick") quickIndex = value
     else if (name === "protection") protectionIndex = value
     else if (name === "profiles") profileIndex = value
@@ -455,6 +454,7 @@ Panel {
     // editor they walk the colour swatches.
     if (dx !== 0) {
       if (focusSection === "editor") { if (editorRow === "color") cycleColor(dx); return }
+      if (focusSection === "tabs") { stepTab(dx); return }
       if (dx > 0 && focusSection === "countries") drillInto(filteredCountries[countryIndex])
       else if (dx < 0 && focusSection === "servers") drillOut()
       // On a header they unfold and fold its list, the way they open and
@@ -496,7 +496,6 @@ Panel {
     else if (focusSection === "nudge") { if (nudgeIndex === 0) requestKillSwitch(); else vpn.dismissNudge() }
     else if (focusSection === "quickHeader") setQuickExpanded(!vpn.quickExpanded)
     else if (focusSection === "quick") runQuick(quickActions[quickIndex].key)
-    else if (focusSection === "tabs") setTab(tabs[tabIndex].key)
     else if (focusSection === "protection") {
       if (protectionIndex === 0) requestKillSwitch()
       else if (protectionIndex === 1) vpn.toggleNetShield()
@@ -563,7 +562,8 @@ Panel {
     clearPending()
     if (pending === "g") {
       if (t === "g") jumpTop()
-      else if (t === "t" || t === "T") setTab(tab === "connections" ? "protection" : "connections")
+      else if (t === "t") stepTab(1)
+      else if (t === "T") stepTab(-1)
       return
     }
     if (pending === "z") {
@@ -734,11 +734,19 @@ Panel {
 
   Timer { id: signOutArm; interval: 5000; onTriggered: root.signOutArmed = false }
 
+  // l and h on the tab row, gt and gT anywhere: the next tab along, and
+  // the strip stops at its ends.
+  function stepTab(step) {
+    var i = 0
+    for (var k = 0; k < tabs.length; k++) if (tabs[k].key === tab) i = k
+    var next = Math.max(0, Math.min(tabs.length - 1, i + step))
+    if (next !== i) setTab(tabs[next].key)
+  }
+
   function setTab(key) {
     if (key !== "protection" && key !== "connections") return
     clearHighlight()
     tab = key
-    tabIndex = key === "connections" ? 0 : 1
     anchorPending = false
     ensureCursor()
   }
@@ -1360,7 +1368,6 @@ Panel {
                 width: tabRow.cellWidth
                 tabKey: modelData.key
                 text: modelData.label
-                tabIdx: index
               }
             }
           }
@@ -2218,7 +2225,6 @@ Panel {
   component TabPill: Button {
     id: pill
     property string tabKey: ""
-    property int tabIdx: 0
 
     fontSize: Style.font.bodySmall
     foreground: root.foreground
@@ -2227,9 +2233,11 @@ Panel {
     verticalPadding: Style.spacing.controlPaddingY + Style.space(2)
     bordered: true
     active: root.tab === tabKey
-    hasCursor: root.cursorActive && root.focusSection === "tabs" && root.tabIndex === tabIdx
+    // The ring sits on the tab that is showing: the row is one cursor stop
+    // and h and l move it.
+    hasCursor: root.cursorActive && root.focusSection === "tabs" && root.tab === tabKey
 
-    onHovered: function(isHovered) { if (isHovered) root.setCursorFromHover("tabs", pill.tabIdx) }
+    onHovered: function(isHovered) { if (isHovered) root.setCursorFromHover("tabs", 0) }
     onClicked: root.setTab(tabKey)   // setTab clears the highlight
   }
 
