@@ -279,12 +279,16 @@ Panel {
     editorButtonIndex = Math.max(0, Math.min(editorButtons.length - 1, editorButtonIndex + step))
   }
 
+  // Each row leads with a glyph in one of the theme's colours, the same
+  // names a profile picks from, so they follow the theme the way the
+  // profile dots do. P2P and Secure Core reuse the glyphs the header shows
+  // while you are on one.
   readonly property var quickActions: [
-    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false },
-    { key: "random", label: "Random", hint: "Any available server", plus: false },
-    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true },
-    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true },
-    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true }
+    { key: "fastest", label: "Fastest", hint: "Best server for your location", plus: false, icon: "\udb80\ude41", color: "yellow" },
+    { key: "random", label: "Random", hint: "Any available server", plus: false, icon: "\udb81\udc9e", color: "cyan" },
+    { key: "p2p", label: "P2P", hint: "Optimized for file sharing", plus: true, icon: "\udb81\udc97", color: "blue" },
+    { key: "securecore", label: "Secure Core", hint: "Route via a privacy-friendly country", plus: true, icon: "\udb82\udd9d", color: "green" },
+    { key: "tor", label: "Tor", hint: "Tor over VPN", plus: true, icon: "\udb81\uddcd", color: "magenta" }
   ]
 
   readonly property var filteredCountries: Model.filterCountries(vpn.countries, filterQuery)
@@ -1423,6 +1427,8 @@ Panel {
                   required property int index
                   width: quickColumn.width
                   hasCursor: root.cursorActive && root.focusSection === "quick" && root.quickIndex === index
+                  icon: modelData.icon
+                  iconColor: root.themeColor(modelData.color)
                   title: modelData.label
                   subtitle: modelData.hint
                   // Secure Core gets an ACTIVE tag; P2P doesn't, since most
