@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
+import qs.Commons as Commons
 import "World.js" as World
 
 // Where in the world you are, and where else you could be.
@@ -23,7 +24,7 @@ Item {
   // {code, city, lat, lon} for the connected server, or null.
   property var current: null
   property bool connected: false
-  property color foreground: Color.foreground
+  property color foreground: Commons.Color.foreground
   property string fontFamily: Style.font.family
   readonly property color dim: Qt.darker(foreground, 1.55)
   // {code, city, lat, lon} for the Secure Core entry country, or null.
@@ -184,7 +185,7 @@ Item {
     width: labelText.implicitWidth + Style.space(8)
     height: labelText.implicitHeight + Style.space(4)
     radius: Style.cornerRadius > 0 ? Style.space(3) : 0
-    color: Style.controlFill(false, true, root.foreground, Color.accent)
+    color: Style.controlFill(false, true, root.foreground, Commons.Color.accent)
     border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.35)
     border.width: 1
     x: Math.max(0, Math.min(root.width - width, dotX + 9))

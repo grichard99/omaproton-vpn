@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import "Model.js" as Model
 
 // Proton VPN state for the bar widget.
@@ -984,7 +985,7 @@ Item {
   function writeNotificationIcon() {
     // Qt prints an opaque colour as #rrggbb and a translucent one as
     // #aarrggbb; SVG wants the former, so drop the alpha if present.
-    var hex = String(Color.accent)
+    var hex = String(Commons.Color.accent)
     if (hex.length === 9) hex = "#" + hex.slice(3)
     notificationIconFile.setText('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">'
                                  + '<path fill="' + hex + '" d="' + protonMarkPath + '"/></svg>\n')
@@ -1207,7 +1208,7 @@ Item {
   }
 
   Connections {
-    target: Color
+    target: Commons.Color
     function onAccentChanged() { root.writeNotificationIcon() }
   }
 
