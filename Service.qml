@@ -266,8 +266,41 @@ Item {
   // slow answer. -k 5 follows up with SIGKILL if the CLI ignores SIGTERM.
   // Connect and disconnect are left alone: they legitimately take a minute.
   readonly property int probeTimeoutSec: 30
+
+  // The probe slot above only orders calls inside one Service, and there is
+  // one Service per monitor: the bar draws a surface on every screen and each
+  // gets its own widget. Two of them running `protonvpn` at the same moment
+  // can both try to refresh the session token, and the one that loses makes
+  // Proton's client library delete the whole stored session, the winner's
+  // good token included. The tunnel stays up, but the CLI reports signed out
+  // until `protonvpn signin` is run again (#75).
+  //
+  // So every `protonvpn` call, from every monitor and the sign-in terminal,
+  // takes one lock file first and the calls queue instead of overlapping.
+  // A probe waits a few seconds at most and then exits with cliLockBusy
+  // rather than holding its slot behind someone else's minute-long connect;
+  // that answer means "ask again", never "failed".
+  readonly property string cliLockPath: (Quickshell.env("XDG_RUNTIME_DIR") || stateDir) + "/omarchy-protonvpn-cli.lock"
+  readonly property int cliLockWaitSec: 10
+  readonly property int cliLockBusy: 75
+  function lockBusy(exitCode) { return exitCode === cliLockBusy }
+
+  // The timeout sits inside the lock so the wait doesn't eat into the CLI's
+  // own thirty seconds.
   function probeCommand(args) {
-    return ["timeout", "-k", "5", String(probeTimeoutSec), "protonvpn"].concat(args)
+    return ["flock", "-w", String(cliLockWaitSec), "-E", String(cliLockBusy), cliLockPath,
+            "timeout", "-k", "5", String(probeTimeoutSec), "protonvpn"].concat(args)
+  }
+  // Something the person asked for waits for the lock however long it takes.
+  function actionCommand(args) {
+    return ["flock", cliLockPath, "protonvpn"].concat(args)
+  }
+  // An Always On reconnect doesn't wait at all. Every monitor's widget sees
+  // the same drop on the same poll; whichever gets the lock reconnects, and
+  // the others find the tunnel back up on their next look instead of
+  // queueing a second connect behind the first.
+  function autoConnectCommand(args) {
+    return ["flock", "-n", "-E", String(cliLockBusy), cliLockPath, "protonvpn"].concat(args)
   }
   // 124 is `timeout` giving up after SIGTERM, 137 after the SIGKILL.
   function probeStalled(exitCode) { return exitCode === 124 || exitCode === 137 }
@@ -735,7 +768,7 @@ Item {
     pendingLabel = label || "Connecting…"
     actionStatus = pendingLabel
     lastError = ""
-    connectProcess.command = ["protonvpn", "connect"].concat(args || [])
+    connectProcess.command = (_autoAttempt ? autoConnectCommand : actionCommand)(["connect"].concat(args || []))
     connectProcess.running = true
   }
 
@@ -905,7 +938,7 @@ Item {
     pendingLabel = "Disconnecting…"
     actionStatus = ""
     lastError = ""
-    actionProcess.command = ["protonvpn", "disconnect"]
+    actionProcess.command = actionCommand(["disconnect"])
     actionProcess.running = true
   }
 
@@ -914,11 +947,12 @@ Item {
   // can be typed in the panel; with none given the terminal asks for it.
   function signIn(username) {
     var u = String(username || "").trim()
+    var lock = Model.shellQuote(cliLockPath)
     var cmd
     if (u === "") {
-      cmd = "read -rp 'Proton username: ' u && protonvpn signin \"$u\""
+      cmd = "read -rp 'Proton username: ' u && flock " + lock + " protonvpn signin \"$u\""
     } else if (Model.validUsername(u)) {
-      cmd = "protonvpn signin " + Model.shellQuote(u)
+      cmd = "flock " + lock + " protonvpn signin " + Model.shellQuote(u)
     } else {
       lastError = "Usernames can only contain letters, numbers and . _ + @ -"
       return false
@@ -935,7 +969,7 @@ Item {
     _expectDown = true
     trafficReset()
     pendingLabel = "Signing out…"
-    actionProcess.command = ["protonvpn", "signout"]
+    actionProcess.command = actionCommand(["signout"])
     actionProcess.running = true
   }
 
@@ -1105,6 +1139,9 @@ Item {
       profilesExpanded = s.profilesExpanded !== false
       recentsExpanded = s.recentsExpanded !== false
     } catch (e) {
+      // A re-read that can't be parsed changes nothing: saving defaults
+      // over it from here would wipe every screen's profiles.
+      if (stateLoaded) return
       recents = []
       profiles = []
       nudgeDismissed = false
@@ -1269,10 +1306,16 @@ Item {
     }
   }
 
+  // Watched, because every monitor's widget holds its own copy: without the
+  // re-read, a profile saved on one screen is written over the next time
+  // another screen saves anything, even just a fold.
   FileView {
     id: stateFile
     path: root.statePath
     printErrors: false
+    watchChanges: true
+    atomicWrites: true
+    onFileChanged: reload()
     onLoaded: root.applyState(text())
     onLoadFailed: root.applyState("{}")
   }
@@ -1500,7 +1543,10 @@ Item {
     // still an error whatever ended the process.
     onExited: function(exitCode, exitStatus) {
       root._probeRunning = false
+      // Another monitor's widget has the CLI. Keep what we know and ask again.
+      if (root.lockBusy(exitCode)) root._wantStatus = true
       Qt.callLater(root.drainProbes)
+      if (root.lockBusy(exitCode)) return
       var out = String(statusStdout.text || "")
       // A stall after the whole answer was printed is the same exit-path
       // failure as the crash, just slower, and `timeout` ended it for us.
@@ -1523,6 +1569,13 @@ Item {
     onExited: function(exitCode) {
       root._probeRunning = false
       Qt.callLater(root.drainProbes)
+      // Waiting on another monitor's widget is not the CLI failing, so it
+      // doesn't count toward giving up.
+      if (root.lockBusy(exitCode)) {
+        accountRetry.interval = 5000
+        accountRetry.restart()
+        return
+      }
       // A one-off failure must not latch "signed out" forever, retry instead
       // of leaving a signed-in user staring at a sign-in prompt. Only after
       // several in a row does the panel give up waiting, see accountGiveUpAfter.
@@ -1570,6 +1623,12 @@ Item {
     stdout: StdioCollector { id: configStdout; waitForEnd: true }
     onExited: function(exitCode) {
       root._probeRunning = false
+      // Still settling: the re-read that clears configPending is only queued.
+      if (root.lockBusy(exitCode)) {
+        root._wantConfig = true
+        Qt.callLater(root.drainProbes)
+        return
+      }
       root.configPending = ""
       root.configPendingValue = ""
       Qt.callLater(root.drainProbes)
@@ -1596,7 +1655,8 @@ Item {
           root.applyConfig("netshield", "malware-only")
           return
         }
-        root.lastError = Model.isPlanError(err) ? "Requires a Proton VPN Plus plan" : Model.elide(err || "Setting failed")
+        if (root.lockBusy(exitCode)) root.lastError = "Proton VPN is busy, try again in a moment"
+        else root.lastError = Model.isPlanError(err) ? "Requires a Proton VPN Plus plan" : Model.elide(err || "Setting failed")
       }
       // Last step of a kill switch change: whatever the CLI made of it, the
       // tunnel goes back up. Before loadConfig(), so the re-read queues behind
@@ -1670,6 +1730,7 @@ Item {
     stdout: StdioCollector { id: countriesStdout; waitForEnd: true }
     onExited: function(exitCode) {
       root._probeRunning = false
+      if (root.lockBusy(exitCode)) root._wantCountries = true
       Qt.callLater(root.drainProbes)
       if (exitCode !== 0) return
       var list = Model.parseCountries(String(countriesStdout.text || ""))
@@ -1693,6 +1754,15 @@ Item {
       root._target = null
       root._autoAttempt = false
       root.pendingLabel = ""
+      // An Always On reconnect that found the CLI taken, most likely by the
+      // same reconnect from another monitor. Not a failure: nothing is
+      // marked, nothing is said, and the next link poll looks again.
+      if (wasAuto && root.lockBusy(exitCode)) {
+        root._desired = -1
+        root.actionStatus = ""
+        root.watchLink()
+        return
+      }
       root._autoNextMs = wasAuto && exitCode !== 0 ? Date.now() + root.autoRetryMs : 0
       if (exitCode === 0) root._autoPinFailed = false
       else if (wasAuto) root._autoPinFailed = true
