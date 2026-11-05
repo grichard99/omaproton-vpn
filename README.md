@@ -756,6 +756,13 @@ so the widget keeps them rare: none on a timer while the panel is closed. Proton
 IPv6 leak guard (`pvpn-killswitch-ipv6`, on a dummy device) stays active
 independently and is deliberately not counted as a live tunnel.
 
+**More than one monitor.** The bar draws one copy of the widget per screen,
+and two `protonvpn` runs at the same moment can sign you out of Proton (the
+CLI's session store doesn't survive two token refreshes racing). So every CLI
+call, from every screen and from the sign-in terminal, takes one lock file in
+`$XDG_RUNTIME_DIR` first and waits its turn. When Always On reconnects, the
+first screen to get the lock does it and the rest see the tunnel come back.
+
 **Where the city list comes from.** The CLI has no server-list command
 (`protonvpn servers` just prints a URL), but the Proton client caches the full
 logical server list at `~/.cache/Proton/VPN/serverlist.json` and refreshes it on

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
+import qs.Commons as Commons
 
 // The official Proton VPN mark, drawn natively from the Simple Icons path so
 // it takes the theme foreground instead of the brand purple/green, the same
@@ -13,7 +14,7 @@ Item {
   id: root
 
   property real iconSize: Style.font.icon
-  property color color: Color.foreground
+  property color color: Commons.Color.foreground
 
   readonly property real viewBox: 24
 

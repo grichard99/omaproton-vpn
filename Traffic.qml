@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import qs.Commons
+import qs.Commons as Commons
 
 // Tunnel throughput: two rates, a 60-second sparkline, session totals.
 //
@@ -21,7 +22,7 @@ Item {
   property real sessionTx: 0
   property int uptimeSec: 0
 
-  property color foreground: Color.foreground
+  property color foreground: Commons.Color.foreground
   property string fontFamily: Style.font.family
   readonly property color dim: Qt.darker(foreground, 1.55)
 

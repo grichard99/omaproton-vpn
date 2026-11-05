@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -90,8 +91,8 @@ Panel {
   // Row 0 inside a drill is "Fastest in <country>"; real servers follow it.
   readonly property int serverRowCount: drilled ? vpn.servers.length + 1 : 0
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
@@ -108,9 +109,9 @@ Panel {
 
   function themeColor(name) {
     var n = String(name || "")
-    if (n === "" || n === "accent") return Color.accent
+    if (n === "" || n === "accent") return Commons.Color.accent
     var v = themePalette[n]
-    return v ? v : Color.accent
+    return v ? v : Commons.Color.accent
   }
 
   function loadPalette(raw) {
@@ -125,7 +126,7 @@ Panel {
 
   FileView {
     id: paletteFile
-    path: Color.currentThemePath + "/colors.toml"
+    path: Commons.Color.currentThemePath + "/colors.toml"
     watchChanges: false
     printErrors: false
     onLoaded: root.loadPalette(text())
@@ -135,7 +136,7 @@ Panel {
   // A theme switch reaches the shell as a new accent or foreground; the
   // symlink under it has changed by then, so re-read the palette too.
   Connections {
-    target: Color
+    target: Commons.Color
     function onAccentChanged() { paletteFile.reload() }
     function onForegroundChanged() { paletteFile.reload() }
     function onBackgroundChanged() { paletteFile.reload() }
@@ -1328,8 +1329,8 @@ Panel {
             width: parent.width
             implicitHeight: nudgeContent.implicitHeight + Style.space(20)
             radius: Style.cornerRadius
-            color: Style.controlFill(false, false, root.foreground, Color.accent)
-            borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+            color: Style.controlFill(false, false, root.foreground, Commons.Color.accent)
+            borderSpec: Border.controlSpec("normal", root.foreground, Commons.Color.accent)
 
             Column {
               id: nudgeContent
@@ -1729,8 +1730,8 @@ Panel {
               width: parent.width
               implicitHeight: editorColumn.implicitHeight + Style.space(20)
               radius: Style.cornerRadius
-              color: Style.controlFill(false, false, root.foreground, Color.accent)
-              borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+              color: Style.controlFill(false, false, root.foreground, Commons.Color.accent)
+              borderSpec: Border.controlSpec("normal", root.foreground, Commons.Color.accent)
 
               Column {
                 id: editorColumn
