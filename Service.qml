@@ -1128,6 +1128,8 @@ Item {
   }
 
   function applyState(text) {
+    // An empty re-read is as unusable as an unparseable one, see the catch.
+    if (stateLoaded && String(text || "").trim() === "") return
     try {
       var s = JSON.parse(String(text || "{}"))
       recents = Array.isArray(s.recents) ? s.recents.slice(0, 3).map(cleanRecent).filter(Boolean) : []
@@ -1317,7 +1319,9 @@ Item {
     atomicWrites: true
     onFileChanged: reload()
     onLoaded: root.applyState(text())
-    onLoadFailed: root.applyState("{}")
+    // Only a first read may fall back to defaults. After that, a file that's
+    // gone keeps what's in memory, and the next save puts it back.
+    onLoadFailed: if (!root.stateLoaded) root.applyState("{}")
   }
 
   // Proton's file, not ours. Watched rather than polled, because the CLI
@@ -1550,7 +1554,9 @@ Item {
       var out = String(statusStdout.text || "")
       // A stall after the whole answer was printed is the same exit-path
       // failure as the crash, just slower, and `timeout` ended it for us.
-      var crashed = exitStatus !== 0 || root.probeStalled(exitCode)
+      // flock reports a child killed by a signal as a normal exit of 128 plus
+      // the signal, so the crash arrives here as a code, not as exitStatus.
+      var crashed = exitStatus !== 0 || exitCode > 128 || root.probeStalled(exitCode)
       if (exitCode === 0 || (crashed && Model.statusComplete(out))) {
         root.applyStatus(out)
         root.lastError = ""
@@ -1760,7 +1766,6 @@ Item {
       if (wasAuto && root.lockBusy(exitCode)) {
         root._desired = -1
         root.actionStatus = ""
-        root.watchLink()
         return
       }
       root._autoNextMs = wasAuto && exitCode !== 0 ? Date.now() + root.autoRetryMs : 0
