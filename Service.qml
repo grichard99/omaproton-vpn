@@ -143,6 +143,11 @@ Item {
     Quickshell.execDetached(["wl-copy", "--", forwardedPort])
   }
 
+  function copyServerIp() {
+    if (serverIp === "") return
+    Quickshell.execDetached(["wl-copy", "--", serverIp])
+  }
+
   // Persisted across restarts: last few places connected to, and whether the
   // kill-switch nudge was dismissed. Location labels only, nothing secret.
   property var recents: []
@@ -740,6 +745,10 @@ Item {
   // clicked. Not persisted; after a restart the header shows the name.
   property bool p2pRequested: false
   readonly property bool currentP2p: !!(currentPlace && currentPlace.p2p === true)
+  // The connected server's IP from servers.py --locate. On Secure Core it is
+  // the entry hop: the exit machine's address isn't in Proton's list.
+  readonly property string serverIp: currentPlace && typeof currentPlace.ip === "string" ? currentPlace.ip : ""
+  readonly property bool serverIpIsEntry: !!(currentPlace && currentPlace.ipKind === "entry")
   // Which Quick Connect row the current connection was asked with, or ""
   // for a named place: that row's glyph fills in while you are on it. A
   // feature-only profile counts as its row. Not persisted, like the above.

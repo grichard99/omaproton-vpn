@@ -20,6 +20,7 @@ Usage: servers.py <COUNTRY_CODE> [limit]   one country's cities, best-first
        servers.py --locate <SERVER_NAME>    one server's city and coordinates
 Prints compact JSON, or [] / {} when the cache is missing.
 """
+import ipaddress
 import json
 import os
 import sys
@@ -31,6 +32,9 @@ P2P = 4
 STREAMING = 8
 
 CACHE = os.path.expanduser("~/.cache/Proton/VPN/serverlist.json")
+# The client's record of the live connection: which physical machine of a
+# logical server it picked, by that machine's IP.
+CONNECTION = os.path.expanduser("~/.cache/Proton/VPN/connection/connection_persistence.json")
 
 
 def labels(features):
@@ -136,6 +140,45 @@ def country_place(data, code):
     return None
 
 
+def clean_ip(value):
+    """value as a canonical IP address string, or None."""
+    try:
+        return str(ipaddress.ip_address(str(value).strip()))
+    except ValueError:
+        return None
+
+
+def server_ip(s):
+    """The IP to show for a connected server, as (ip, kind), or (None, None).
+
+    On a regular server the machine you connect to is the one your traffic
+    leaves from, and every physical machine behind one name shares that IP,
+    so the name alone is enough: kind "exit".
+
+    Secure Core is two hops, and the list only describes the first: its
+    ExitIP repeats the entry address in Sweden, Switzerland or Iceland. The
+    real exit isn't anywhere on disk, so show the entry hop, kind "entry",
+    picked out by the client's own connection record. If that record names
+    another server (written late, or left from an earlier connection), show
+    nothing rather than a guess.
+    """
+    machines = s.get("Servers") or []
+    if not (s.get("Features") or 0) & SECURE_CORE:
+        ips = {clean_ip(m.get("ExitIP")) for m in machines} - {None}
+        return (ips.pop(), "exit") if len(ips) == 1 else (None, None)
+    try:
+        with open(CONNECTION, "r") as fh:
+            record = json.load(fh).get("server") or {}
+    except (OSError, ValueError, AttributeError):
+        return None, None
+    if str(record.get("server_name") or "").upper() != (s.get("Name") or "").upper():
+        return None, None
+    ip = clean_ip(record.get("server_ip"))
+    if ip is None or ip not in {clean_ip(m.get("EntryIP")) for m in machines}:
+        return None, None
+    return ip, "entry"
+
+
 def locate(data, name):
     """Where one server is. Used to light up the connected city on the map.
     A Secure Core server (CH-US#3: enters Switzerland, exits New York) also
@@ -156,6 +199,10 @@ def locate(data, name):
             # makes a point of it when that's what you asked for.
             "p2p": bool(features & P2P),
         }
+        ip, kind = server_ip(s)
+        if ip:
+            place["ip"] = ip
+            place["ipKind"] = kind
         entry_code = (s.get("EntryCountry") or "").upper()
         if (s.get("Features") or 0) & SECURE_CORE and entry_code and entry_code != place["code"]:
             entry = country_place(data, entry_code)
