@@ -328,6 +328,11 @@ The **Server** line updates within seconds from NetworkManager even while a
 connect is still in progress. The other rows come from the CLI and can lag a
 moment behind.
 
+An **Exit IP** row sits under the location: the public address your traffic
+leaves from, read from Proton's server list, no lookup over the network. Click
+it to copy. On Secure Core the list only knows the first hop, so the row reads
+**Entry IP** and shows the Swiss, Swedish or Icelandic server you connected to.
+
 With [port forwarding](#port-forwarding) on and a P2P server connected, a
 **Forwarded port** row appears. Click it to copy the number; it reads "Copied"
 for a moment. Paste it into your torrent client's listening port.
