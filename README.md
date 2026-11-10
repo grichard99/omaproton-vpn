@@ -768,6 +768,20 @@ call, from every screen and from the sign-in terminal, takes one lock file in
 `$XDG_RUNTIME_DIR` first and waits its turn. When Always On reconnects, the
 first screen to get the lock does it and the rest see the tunnel come back.
 
+**Keyring prompts, or signed out for no reason.** If every login asks you to
+"Choose password for a new keyring", other apps (`gh`, Brave, Chrome) forget
+their saved logins, and the panel says "Proton VPN isn't answering. Is your
+keyring unlocked?" or shows you signed out, the cause is in how Proton's client
+saves your session. It stores it in the unlocked keyring file
+(`~/.local/share/keyrings/Default_keyring.keyring`) with raw line breaks inside
+the value, which that file format can't hold. On a later boot the keyring
+either fails to load the file at all, or loads it and Proton can't read its
+own session back, deletes it, and you're signed out. Signing in again fixes it
+until the next time. The widget doesn't touch the keyring file. The full
+diagnosis, and a repair you can run yourself before the keyring starts, are in
+[issue #83](https://github.com/grichard99/omaproton-vpn/issues/83), thanks to
+reeseroyster. The real fix belongs in Proton's keyring library.
+
 **Where the city list comes from.** The CLI has no server-list command
 (`protonvpn servers` just prints a URL), but the Proton client caches the full
 logical server list at `~/.cache/Proton/VPN/serverlist.json` and refreshes it on
