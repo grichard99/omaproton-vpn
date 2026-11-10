@@ -76,6 +76,22 @@ def usable(s, check_status=True):
     return not ((s.get("Features") or 0) & SECURE_CORE)
 
 
+def coords(s):
+    """A server's exit coordinates as (lat, lon), or (None, None).
+
+    Newer server lists carry them in ExitLocation as Latitude/Longitude (with
+    an EntryLocation beside it); older ones in Location as Lat/Long. Read the
+    new shape first so both keep working.
+    """
+    for field, lat_key, lon_key in (("ExitLocation", "Latitude", "Longitude"),
+                                    ("Location", "Lat", "Long")):
+        loc = s.get(field) or {}
+        lat, lon = loc.get(lat_key), loc.get(lon_key)
+        if lat is not None and lon is not None:
+            return lat, lon
+    return None, None
+
+
 def all_cities(data):
     """Every city worldwide: one entry per (country, city) with its coordinates
     and best server. Feeds the panel's mini-map; ~200 rows for ~18k servers."""
@@ -84,8 +100,7 @@ def all_cities(data):
     for s in data.get("LogicalServers") or []:
         if not usable(s, check_status):
             continue
-        loc = s.get("Location") or {}
-        lat, lon = loc.get("Lat"), loc.get("Long")
+        lat, lon = coords(s)
         if lat is None or lon is None:
             continue
         code = (s.get("ExitCountry") or "").upper()
@@ -124,14 +139,14 @@ def country_place(data, code):
             continue
         if (s.get("Features") or 0) & SECURE_CORE:
             continue
-        loc = s.get("Location") or {}
-        if loc.get("Lat") is None or loc.get("Long") is None:
+        lat, lon = coords(s)
+        if lat is None or lon is None:
             continue
         return {
             "code": code,
             "city": (s.get("City") or "").strip(),
-            "lat": loc.get("Lat"),
-            "lon": loc.get("Long"),
+            "lat": lat,
+            "lon": lon,
         }
     return None
 
@@ -144,14 +159,14 @@ def locate(data, name):
     for s in data.get("LogicalServers") or []:
         if (s.get("Name") or "").upper() != want:
             continue
-        loc = s.get("Location") or {}
+        lat, lon = coords(s)
         features = s.get("Features") or 0
         place = {
             "name": s.get("Name") or "",
             "code": (s.get("ExitCountry") or "").upper(),
             "city": (s.get("City") or "").strip(),
-            "lat": loc.get("Lat"),
-            "lon": loc.get("Long"),
+            "lat": lat,
+            "lon": lon,
             # Feature bit 4 is P2P. Most servers permit it, so the panel only
             # makes a point of it when that's what you asked for.
             "p2p": bool(features & P2P),
