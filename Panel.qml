@@ -1288,6 +1288,15 @@ Panel {
               }
             }
             InfoPair { visible: vpn.location !== ""; label: "Location"; value: vpn.location }
+            // Its own row, so the whole address fits. Click to copy, like
+            // the forwarded port.
+            CopyPair {
+              visible: vpn.serverIp !== ""
+              label: vpn.serverIpIsEntry ? "Entry IP" : "Exit IP"
+              value: vpn.serverIp
+              copied: root.ipCopied
+              onCopy: root.copyIp()
+            }
             CopyPair {
               visible: vpn.forwardedPort !== ""
               label: "Forwarded port"
@@ -2554,6 +2563,15 @@ Panel {
     vpn.copyForwardedPort()
     portCopied = true
     portCopiedTimer.restart()
+  }
+
+  // The same flash on the Exit IP row.
+  property bool ipCopied: false
+  Timer { id: ipCopiedTimer; interval: 2000; onTriggered: root.ipCopied = false }
+  function copyIp() {
+    vpn.copyServerIp()
+    ipCopied = true
+    ipCopiedTimer.restart()
   }
 
   // An InfoPair you click to copy the value. The value carries a copy glyph
