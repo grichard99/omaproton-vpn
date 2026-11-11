@@ -79,6 +79,7 @@ Item {
   // {code, city, lat, lon} for the server we're on, or null.
   property var currentPlace: null
   property string _locatePending: ""
+  property string _relocated: ""
 
   // Tunnel throughput, from the kernel's own counters for the tunnel
   // interface (/sys/class/net/<dev>/statistics). Sampled once a second, only
@@ -995,7 +996,7 @@ Item {
   // changes; a lookup arriving mid-run is queued, not dropped.
   function locateServer(name) {
     var n = String(name || "").trim()
-    if (n === "") { currentPlace = null; _locatePending = ""; return }
+    if (n === "") { currentPlace = null; _locatePending = ""; _relocated = ""; return }
     if (currentPlace && currentPlace.name === n) return
     if (locateProcess.running) { _locatePending = n; return }
     locateProcess.command = ["python3", scriptPath, "--locate", n]
@@ -1003,6 +1004,7 @@ Item {
   }
 
   onDisplayServerChanged: {
+    _relocated = ""
     locateServer(displayServer)
     // A different server means a different port, or none.
     forwardedPort = ""
@@ -1899,7 +1901,27 @@ Item {
         var next = root._locatePending
         root._locatePending = ""
         root.locateServer(next)
+        return
       }
+      // A place with no address: a server with several entry machines,
+      // looked up before the client had recorded which one it chose. Look
+      // once more when it has had time to, and only once per server.
+      var p = root.currentPlace
+      if (p && !p.ip && root._relocated !== p.name) {
+        root._relocated = p.name
+        locateAgain.restart()
+      }
+    }
+  }
+
+  Timer {
+    id: locateAgain
+    interval: 10000
+    onTriggered: {
+      var p = root.currentPlace
+      if (!p || p.ip || p.name !== root.displayServer || !root.linkActive || locateProcess.running) return
+      locateProcess.command = ["python3", root.scriptPath, "--locate", p.name]
+      locateProcess.running = true
     }
   }
 

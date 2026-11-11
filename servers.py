@@ -240,15 +240,19 @@ def server_ip(s):
     ExitIP field repeats the inbound address. The panel looks that one up
     separately.
 
-    On a regular server every physical machine behind one name shares one
-    address, so the name alone is enough. Secure Core names have several
-    entry machines, so the one in use is picked out by the client's own
-    connection record. If that record names another server (written late, or
-    left from an earlier connection), return nothing rather than a guess.
+    On nearly every server, Secure Core included, the physical machines
+    behind one name share one address, so the name alone is enough. A few
+    Secure Core names have several entry machines; there the one in use is
+    picked out by the client's own connection record. The client writes
+    that record a few seconds after the tunnel is up, so the first look can
+    find it still naming the previous server: return nothing then rather
+    than a guess, and the panel looks once more a little later.
     """
     known = {clean_ip(m.get("EntryIP")) for m in s["machines"]} - {None}
-    if not s["features"] & SECURE_CORE:
-        return known.pop() if len(known) == 1 else None
+    if len(known) == 1:
+        return known.pop()
+    if not known:
+        return None
     record = read_json(CONNECTION, CONNECTION_LIMIT)
     record = record.get("server") if isinstance(record, dict) else None
     if not isinstance(record, dict):
