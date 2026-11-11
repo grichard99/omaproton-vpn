@@ -328,6 +328,27 @@ The **Server** line updates within seconds from NetworkManager even while a
 connect is still in progress. The other rows come from the CLI and can lag a
 moment behind.
 
+Two address rows sit under the location, and clicking either copies it:
+
+- **Server IP** is the address your computer connects to. It comes from
+  Proton's server list on disk. On Secure Core it's the Swiss, Swedish or
+  Icelandic entry server.
+- **Exit IP** is the address websites see you as. A VPN server usually sends
+  traffic out from a different address than the one you connect to, and that
+  one isn't in any file, so the widget asks for it: one request to
+  [ip.me](https://ip.me), Proton's own "what's my IP" page, which answers with
+  the address and nothing else. The row appears a moment after you open the
+  panel. See [Security and privacy](#security-and-privacy) for what ip.me is
+  and exactly when that request is made.
+
+A **DNS** row shows where your lookups go, which is how a VPN can leak the
+list of sites you visit while still hiding your address. `10.2.0.1 · Proton`
+means every lookup goes to Proton's resolver inside the tunnel (`Custom` if
+you set your own DNS in Proton's settings). If the tunnel isn't the only
+resolver in play, the row reads **May bypass the VPN** in the warning colour.
+It is read from the system resolver (`resolvectl`), with no network request,
+and is only shown on machines that use that resolver.
+
 With [port forwarding](#port-forwarding) on and a P2P server connected, a
 **Forwarded port** row appears. Click it to copy the number; it reads "Copied"
 for a moment. Paste it into your torrent client's listening port.
@@ -663,24 +684,37 @@ This plugin runs unsandboxed inside the Omarchy shell process, like every
 Omarchy plugin. It:
 
 - stores no credentials, tokens, or account data
-- makes no network requests of its own, with one exception you switch on:
-  with port forwarding on and the tunnel up, `port.py` sends a NAT-PMP renewal
-  to the VPN gateway (`10.2.0.1`, inside the tunnel) every 45 seconds. That is
-  the same exchange Proton's own guide has you run, it goes nowhere else, and
-  the answer is only shown in the panel and copied to the clipboard when you
-  click it
+- makes two kinds of network request of its own, both only through the
+  tunnel, and nothing else:
+  - with port forwarding on (a switch you turn on) and the tunnel up,
+    `port.py` sends a NAT-PMP renewal to the VPN gateway (`10.2.0.1`, inside
+    the tunnel) every 45 seconds. That is the same exchange Proton's own guide
+    has you run, it goes nowhere else, and the answer is only shown in the
+    panel and copied to the clipboard when you click it
+  - for the Exit IP row, one `curl` request to `https://ip.me`, which Proton
+    runs. It is made when you open the panel while connected, once per
+    connection (up to three tries if the tunnel isn't carrying traffic yet),
+    never on a timer and never with the panel closed. It is bound to the
+    tunnel device, so if the VPN is down the request fails; it cannot go out
+    over your normal connection, and ip.me only ever sees the VPN's address.
+    The answer must be a plain IPv4 address or it is thrown away, and it is
+    only shown in the panel and copied when you click it
 - never asks for root, the CLI install runs through Omarchy's own installer
   in a terminal that owns the password prompt
 - never downloads or executes remote code
 - runs every command as an argument list, never through a shell, with one
   exception below
 - reads Proton's server cache read-only (city list, coordinates, and the map's
-  connected-city lookup all come from it), reads the tunnel's byte counters
+  connected-city lookup all come from it), asks the system resolver which
+  DNS server the tunnel uses (`resolvectl status`, local) when the panel
+  opens, reads the tunnel's byte counters
   under `/sys/class/net/` once a second while the panel is open, and writes
   two files of its own under `~/.local/state/omarchy-protonvpn/`
   (`state.json`: your profiles, recent location labels, whether you dismissed
   the Kill Switch prompt, and whether Always On is on; `notification-icon.svg`: the
-  Proton mark in your theme's colour, for the notification)
+  Proton mark in your theme's colour, for the notification). If `state.json`
+  can't be read at startup (a slip in a hand edit, say), what was in it is
+  kept beside it as `state.json.unreadable` before a fresh one is saved
 - writes one file that isn't its own, and only if you turn split tunneling on:
   `~/.config/Proton/VPN/settings.json`, Proton's own settings. Rules below.
 
@@ -736,6 +770,27 @@ when its own cache has expired, server loads every ~15 minutes, the full list
 every ~3 hours, and only while connected. The widget's polling doesn't add API
 traffic beyond what the client already does on its own schedule.
 
+**What ip.me is, and why the widget talks to it.** [ip.me](https://ip.me) is
+owned by Proton, the same company that runs the VPN, and it exists for exactly
+this purpose: telling you which IP address the internet sees you as. The
+domain is registered to Proton AG, which you can check with `whois ip.me`.
+Opened in a browser it shows your address and location. Asked
+by a command-line tool it replies with one line of plain text, your address.
+The widget uses it because the exit address isn't in any file on your
+computer; something on the internet has to say what it sees.
+
+- What is sent: a plain HTTPS request, with no account, token, identifier or
+  parameters of any kind.
+- What ip.me can see: the VPN server's exit address, the same thing every
+  website you visit sees. It cannot see your real address, because the request
+  is bound to the tunnel and fails if the tunnel is down.
+- What comes back: an address, which must be a plain IPv4 address or it is
+  discarded. It is shown in the Exit IP row and copied if you click it. It is
+  never stored, logged, or sent anywhere.
+- See it for yourself: run `curl https://ip.me` in a terminal while connected.
+  The exact command the widget runs is
+  `curl --disable --ipv4 --silent --max-time 6 --proto =https --max-filesize 64 --interface proton0 https://ip.me`.
+
 **Notifications** are sent straight to the desktop notification service over
 D-Bus and contain only the connection state, the server and its location, and
 the protocol.
@@ -762,6 +817,20 @@ CLI's session store doesn't survive two token refreshes racing). So every CLI
 call, from every screen and from the sign-in terminal, takes one lock file in
 `$XDG_RUNTIME_DIR` first and waits its turn. When Always On reconnects, the
 first screen to get the lock does it and the rest see the tunnel come back.
+
+**Keyring prompts, or signed out for no reason.** If every login asks you to
+"Choose password for a new keyring", other apps (`gh`, Brave, Chrome) forget
+their saved logins, and the panel says "Proton VPN isn't answering. Is your
+keyring unlocked?" or shows you signed out, the cause is in how Proton's client
+saves your session. It stores it in the unlocked keyring file
+(`~/.local/share/keyrings/Default_keyring.keyring`) with raw line breaks inside
+the value, which that file format can't hold. On a later boot the keyring
+either fails to load the file at all, or loads it and Proton can't read its
+own session back, deletes it, and you're signed out. Signing in again fixes it
+until the next time. The widget doesn't touch the keyring file. The full
+diagnosis, and a repair you can run yourself before the keyring starts, are in
+[issue #83](https://github.com/grichard99/omaproton-vpn/issues/83), thanks to
+reeseroyster. The real fix belongs in Proton's keyring library.
 
 **Where the city list comes from.** The CLI has no server-list command
 (`protonvpn servers` just prints a URL), but the Proton client caches the full

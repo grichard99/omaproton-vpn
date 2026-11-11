@@ -43,6 +43,26 @@ SHELLS = {"sh", "bash", "zsh", "fish", "dash", "ksh", "tcsh", "env",
           "gtk-launch", "xdg-open"}
 DISPATCHERS = {"hyprctl", "uwsm", "xdg-terminal-exec", "dbus-launch"}
 DISPATCHER_PREFIXES = ("omarchy-launch-", "omarchy-webapp-handler-")
+# Programs that run something else: the path on disk is shared by everything
+# started through them, so it names no one app. Matched with any version
+# suffix, python3.14 as well as python.
+RUNTIMES = ("python", "pypy", "perl", "ruby", "node", "nodejs", "bun", "deno",
+            "java", "lua", "luajit", "php", "mono", "dotnet", "wine",
+            "electron", "nice", "nohup", "setsid", "timeout", "stdbuf",
+            "ionice", "chrt")
+
+# A desktop entry is a few hundred bytes; this is far past any real one.
+ENTRY_LIMIT = 1024 * 1024
+
+
+def generic(base):
+    """Whether a program name is a shell, runner or runtime, not an app."""
+    if base in SANDBOX_RUNNERS or base in SHELLS or base in DISPATCHERS:
+        return True
+    if base.startswith(DISPATCHER_PREFIXES):
+        return True
+    stem = base.rstrip("0123456789.-")
+    return stem in RUNTIMES
 
 
 def data_dirs():
@@ -61,6 +81,10 @@ def parse_entry(path):
     exec_line = None
     in_entry = False
     try:
+        # A regular file of sane size only: a pipe would block for ever and
+        # a device never ends.
+        if not os.path.isfile(path) or os.path.getsize(path) > ENTRY_LIMIT:
+            return None
         with open(path, encoding="utf-8", errors="replace") as handle:
             for line in handle:
                 line = line.strip()
@@ -105,10 +129,7 @@ def program_of(exec_line):
     if not parts:
         return None
     program = parts[0]
-    base = os.path.basename(program)
-    if base in SANDBOX_RUNNERS or base in SHELLS or base in DISPATCHERS:
-        return None
-    if base.startswith(DISPATCHER_PREFIXES):
+    if "\0" in program or generic(os.path.basename(program)):
         return None
     return program
 
@@ -128,12 +149,20 @@ def resolve(program):
                 break
     if not candidate:
         return None
-    candidate = os.path.realpath(candidate)
-    if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+    try:
+        candidate = os.path.realpath(candidate)
+        if not os.path.isfile(candidate) or not os.access(candidate, os.X_OK):
+            return None
+        # A program that runs as another user is a wrapper around the real
+        # app, and a prefix match on it would catch everything launched
+        # through it.
+        if os.stat(candidate).st_mode & (stat.S_ISUID | stat.S_ISGID):
+            return None
+    except (OSError, ValueError):
         return None
-    # A program that runs as another user is a wrapper around the real app,
-    # and a prefix match on it would catch everything launched through it.
-    if os.stat(candidate).st_mode & (stat.S_ISUID | stat.S_ISGID):
+    # Checked again on the real file: a link named anything can point at a
+    # shell or a runtime.
+    if generic(os.path.basename(candidate)):
         return None
     return candidate
 
@@ -170,7 +199,10 @@ def collect():
 
 
 def main():
-    by_path = collect()
+    try:
+        by_path = collect()
+    except Exception:  # noqa: BLE001 - a traceback here is an empty picker
+        by_path = {}
     apps = [{"value": path, "label": name, "description": path}
             for path, name in by_path.items()]
     apps.sort(key=lambda a: (a["label"].lower(), a["value"]))
