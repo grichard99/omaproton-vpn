@@ -135,7 +135,10 @@ Item {
     portProcess.running = true
   }
 
-  onConnectedChanged: if (!connected) { forwardedPort = ""; activeProfile = "" }
+  onConnectedChanged: {
+    if (!connected) { forwardedPort = ""; activeProfile = "" }
+    lookupExitIp()
+  }
 
   // Copy is the only thing the widget ever does with the port.
   function copyForwardedPort() {
@@ -146,6 +149,11 @@ Item {
   function copyServerIp() {
     if (serverIp === "") return
     Quickshell.execDetached(["wl-copy", "--", serverIp])
+  }
+
+  function copyExitIp() {
+    if (exitIp === "") return
+    Quickshell.execDetached(["wl-copy", "--", exitIp])
   }
 
   // Persisted across restarts: last few places connected to, and whether the
@@ -745,10 +753,45 @@ Item {
   // clicked. Not persisted; after a restart the header shows the name.
   property bool p2pRequested: false
   readonly property bool currentP2p: !!(currentPlace && currentPlace.p2p === true)
-  // The connected server's IP from servers.py --locate. On Secure Core it is
-  // the entry hop: the exit machine's address isn't in Proton's list.
-  readonly property string serverIp: currentPlace && typeof currentPlace.ip === "string" ? currentPlace.ip : ""
-  readonly property bool serverIpIsEntry: !!(currentPlace && currentPlace.ipKind === "entry")
+  // The address this computer connects to, from servers.py --locate. On
+  // Secure Core that is the entry hop.
+  readonly property string serverIp: currentPlace && currentPlace.name === displayServer
+                                     ? Model.cleanIpv4(currentPlace.ip) : ""
+
+  // The address websites see. A server sends traffic out from a different
+  // address than the one you connect to, and that one is in no file on disk,
+  // so it has to be asked for: one plain-text request to ip.me, which Proton
+  // runs, pinned to the tunnel device so it cannot leave any other way (with
+  // the tunnel gone, curl fails instead of asking over the bare connection).
+  // Asked once per connection, and only with the panel open over a settled
+  // tunnel: never on a timer, never in the background.
+  property string exitIp: ""
+  property string _exitIpFor: ""
+  property string _exitIpAsked: ""
+  property int _exitIpTries: 0
+  readonly property string _exitIpKey: linkActive && linkDevice !== "" && linkServer !== ""
+                                       ? linkDevice + "|" + linkServer : ""
+
+  function lookupExitIp() {
+    var key = _exitIpKey
+    if (key !== _exitIpFor) {
+      exitIp = ""
+      _exitIpFor = key
+      _exitIpTries = 0
+      exitIpRetry.stop()
+    }
+    if (key === "" || !panelOpen || !connected || busy) return
+    if (exitIp !== "" || exitIpProcess.running || exitIpRetry.running || _exitIpTries >= 3) return
+    _exitIpTries++
+    _exitIpAsked = key
+    exitIpProcess.command = ["curl", "--disable", "--ipv4", "--silent", "--max-time", "6",
+                             "--proto", "=https", "--max-filesize", "64",
+                             "--interface", linkDevice, "https://ip.me"]
+    exitIpProcess.running = true
+  }
+
+  on_ExitIpKeyChanged: lookupExitIp()
+  onBusyChanged: lookupExitIp()
   // Which Quick Connect row the current connection was asked with, or ""
   // for a named place: that row's glyph fills in while you are on it. A
   // feature-only profile counts as its row. Not persisted, like the above.
@@ -1107,21 +1150,44 @@ Item {
   }
 
 
-  // The only argv a recent may carry: `--country US`, `--p2p`, or a server
-  // name like US-TX#572. The state file is plain JSON under $HOME, so it is
-  // checked on the way in rather than trusted on the way to `protonvpn
-  // connect`. Anything that doesn't fit is dropped, not repaired.
+  // The only argv a recent or profile may carry, which is exactly what the
+  // panel itself builds: nothing (fastest), `--random`, `--country CC`, or a
+  // server name like US-TX#572, and after anything but a server name one of
+  // `--p2p`, `--securecore`, `--tor`. The state file is plain JSON under
+  // $HOME, so it is checked on the way in rather than trusted on the way to
+  // `protonvpn connect`: no other option can ride in on it. Anything that
+  // doesn't fit is dropped, not repaired.
   readonly property var connectArg: /^[A-Za-z0-9#-]{1,64}$/
+  readonly property var connectFeatures: ({ "--p2p": true, "--securecore": true, "--tor": true })
+
+  function validConnectArgs(args) {
+    if (!Array.isArray(args) || args.length > 3) return false
+    for (var k = 0; k < args.length; k++) if (typeof args[k] !== "string") return false
+    var i = 0
+    var named = false
+    if (args[0] === "--country") {
+      if (!/^[A-Z]{2}$/.test(args[1] || "")) return false
+      i = 2
+    } else if (args[0] === "--random") {
+      i = 1
+    } else if (args.length > 0 && args[0].charAt(0) !== "-") {
+      if (!connectArg.test(args[0])) return false
+      named = true
+      i = 1
+    }
+    if (i < args.length && !named && connectFeatures[args[i]] === true) i++
+    return i === args.length
+  }
 
   function cleanRecent(r) {
-    if (!r || typeof r !== "object" || typeof r.key !== "string" || !Array.isArray(r.args)) return null
-    var args = []
-    for (var i = 0; i < r.args.length && i < 4; i++) {
-      var a = String(r.args[i])
-      if (!connectArg.test(a)) return null
-      args.push(a)
+    if (!r || typeof r !== "object" || typeof r.key !== "string" || r.key.length > 96) return null
+    if (!validConnectArgs(r.args)) return null
+    return {
+      key: r.key,
+      title: Model.oneLine(r.title, 80),
+      subtitle: Model.oneLine(r.subtitle, 120),
+      args: r.args.slice()
     }
-    return { key: r.key, title: String(r.title || ""), subtitle: String(r.subtitle || ""), args: args }
   }
 
   // Same rules as a recent for the argv, plus a name that fits on a row and
@@ -1153,6 +1219,10 @@ Item {
       // A re-read that can't be parsed changes nothing: saving defaults
       // over it from here would wipe every screen's profiles.
       if (stateLoaded) return
+      // A first read that can't be parsed starts from defaults, and the next
+      // save would replace the file. Keep what was there beside it first, so
+      // a slip in a hand edit doesn't cost every profile.
+      if (String(text || "").trim() !== "") stateBadFile.setText(String(text))
       recents = []
       profiles = []
       nudgeDismissed = false
@@ -1230,6 +1300,9 @@ Item {
   }
 
   function recordRecent(target) {
+    // Built from the CLI's confirmation line when no place was named, so it
+    // goes through the same check as one read back from the state file.
+    target = cleanRecent(target)
     if (!target || !target.key) return
     var next = [target]
     for (var i = 0; i < recents.length && next.length < 3; i++) {
@@ -1264,6 +1337,30 @@ Item {
     refresh()
     loadCountries(false)
     loadConfig()
+    // Up to three tries each time the panel is opened, not three for ever.
+    if (exitIp === "") _exitIpTries = 0
+    lookupExitIp()
+  }
+
+  Process {
+    id: exitIpProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: exitIpStdout; waitForEnd: true }
+    onExited: function(exitCode) {
+      // An answer for a tunnel that has since changed is not this one's.
+      if (root._exitIpAsked !== root._exitIpKey) { root.lookupExitIp(); return }
+      var ip = exitCode === 0 ? Model.cleanIpv4(String(exitIpStdout.text || "")) : ""
+      if (ip !== "") root.exitIp = ip
+      else if (root._exitIpTries < 3) exitIpRetry.restart()
+    }
+  }
+
+  // A tunnel can be up a moment before it carries traffic.
+  Timer {
+    id: exitIpRetry
+    interval: 3000
+    onTriggered: root.lookupExitIp()
   }
 
   Process {
@@ -1331,6 +1428,13 @@ Item {
     // Only a first read may fall back to defaults. After that, a file that's
     // gone keeps what's in memory, and the next save puts it back.
     onLoadFailed: if (!root.stateLoaded) root.applyState("{}")
+  }
+
+  FileView {
+    id: stateBadFile
+    path: root.statePath + ".unreadable"
+    printErrors: false
+    atomicWrites: true
   }
 
   // Proton's file, not ours. Watched rather than polled, because the CLI
@@ -1622,6 +1726,13 @@ Item {
         root.loadCities(true)
       }
       if (!info.signedIn) {
+        // The CLI answered and says signed out. With a tunnel up, the link
+        // watcher would otherwise ask again on every poll, one CLI start
+        // and one keyring client every few seconds for as long as it lasts.
+        if (root.linkActive) {
+          accountRetry.interval = 60000
+          accountRetry.restart()
+        }
         root.maxTier = -1
         root.countries = []
         root.countriesLoaded = false
@@ -1714,6 +1825,7 @@ Item {
         root.citiesLoaded = root.cities.length > 0
       } catch (e) {
         root.cities = []
+        root.citiesLoaded = false
       }
     }
   }
@@ -1777,10 +1889,17 @@ Item {
         root.actionStatus = ""
         return
       }
-      root._autoNextMs = wasAuto && exitCode !== 0 ? Date.now() + root.autoRetryMs : 0
-      if (exitCode === 0) root._autoPinFailed = false
+      // Exit 0 is not proof of a tunnel. The CLI also exits 0 when it
+      // refuses to run beside the Proton desktop app, when it declines a
+      // server above the account's plan, and for a help flag. Only its own
+      // "Connected to ..." line counts; without it nothing is announced,
+      // nothing is recorded, and the override is dropped so the panel shows
+      // what the link actually is.
+      var ok = exitCode === 0 && Model.connectedLine(out) !== ""
+      root._autoNextMs = wasAuto && !ok ? Date.now() + root.autoRetryMs : 0
+      if (ok) root._autoPinFailed = false
       else if (wasAuto) root._autoPinFailed = true
-      if (exitCode !== 0) {
+      if (!ok) {
         root._desired = -1
         root.activeProfile = ""
         var text = err || out || "Connect failed"
@@ -1794,7 +1913,7 @@ Item {
         // The confirmation line, which is not always the first one: an expired
         // server list puts "Server list is outdated, updating..." ahead of it,
         // and that is not what the panel or the notification should report.
-        var line = Model.elide(Model.connectedLine(out) || out.split("\n")[0] || "", 90)
+        var line = Model.elide(Model.connectedLine(out), 90)
         root.actionStatus = line
         actionStatusTimer.restart()
         // Fastest, Random, P2P, Secure Core and Tor arrive here with no target

@@ -21,8 +21,13 @@ section:
 - Stores no credentials, tokens, or account data. Sign-in goes to the
   Proton CLI's own prompt in a terminal; the widget never sees the password
   or 2FA code.
-- Makes no network requests of its own. The world map is drawn from bundled
-  data and the Proton client's own cache.
+- Makes two kinds of network request of its own, both only through the VPN
+  tunnel: a NAT-PMP renewal to the VPN gateway while port forwarding is
+  switched on, and one request to `https://ip.me` (run by Proton) for the
+  Exit IP row when the panel is opened while connected. The second is bound
+  to the tunnel device, so it fails if the VPN is down and never goes out
+  over the normal connection. The world map is drawn from bundled data and
+  the Proton client's own cache.
 - Never asks for root. The CLI install goes through Omarchy's installer, which
   owns the password prompt in a terminal.
 - Runs every command as an argument list, never through a shell, except the
