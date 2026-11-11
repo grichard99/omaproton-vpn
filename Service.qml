@@ -790,7 +790,31 @@ Item {
     exitIpProcess.running = true
   }
 
-  on_ExitIpKeyChanged: lookupExitIp()
+  on_ExitIpKeyChanged: { lookupExitIp(); lookupDns() }
+
+  // Where DNS lookups go. An address can be hidden while the list of every
+  // site looked up still goes somewhere else, and plenty of setups carry a
+  // resolver of their own beside the VPN's. The system resolver already
+  // knows the answer, so this asks it about the tunnel device: local, no
+  // network. Asked when the panel opens and when the tunnel changes. With
+  // no answer (no tunnel, or a machine that doesn't use this resolver) the
+  // row isn't shown.
+  property string dnsServer: ""
+  property bool dnsRouted: false
+  readonly property bool customDns: !!(protonSettings && protonSettings["custom_dns"]
+                                       && protonSettings["custom_dns"]["enabled"] === true)
+  readonly property string dnsText: {
+    if (dnsServer === "") return ""
+    if (!dnsRouted) return "May bypass the VPN"
+    return dnsServer + " · " + (customDns ? "Custom" : "Proton")
+  }
+
+  function lookupDns() {
+    if (_exitIpKey === "") { dnsServer = ""; dnsRouted = false; return }
+    if (!panelOpen || dnsProcess.running) return
+    dnsProcess.command = ["resolvectl", "--no-pager", "status", linkDevice]
+    dnsProcess.running = true
+  }
   onBusyChanged: lookupExitIp()
   // Which Quick Connect row the current connection was asked with, or ""
   // for a named place: that row's glyph fills in while you are on it. A
@@ -1340,6 +1364,20 @@ Item {
     // Up to three tries each time the panel is opened, not three for ever.
     if (exitIp === "") _exitIpTries = 0
     lookupExitIp()
+    lookupDns()
+  }
+
+  Process {
+    id: dnsProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: dnsStdout; waitForEnd: true }
+    onExited: function(exitCode) {
+      var dns = exitCode === 0 && root._exitIpKey !== ""
+        ? Model.parseDnsStatus(String(dnsStdout.text || "")) : { server: "", routed: false }
+      root.dnsServer = dns.server
+      root.dnsRouted = dns.routed
+    }
   }
 
   Process {

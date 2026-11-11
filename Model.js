@@ -27,6 +27,44 @@ function cleanIpv4(text) {
   return Number(m[1]) + "." + Number(m[2]) + "." + Number(m[3]) + "." + Number(m[4])
 }
 
+// `resolvectl status <device>` -> the tunnel's DNS server and whether the
+// resolver sends every lookup to it:
+//
+//   Link 5 (proton0)
+//          DNS Servers: 10.2.0.1 2a07:b944::2:1
+//           DNS Domain: ~.
+//
+// "~." is the catch-all routing domain. A link that holds it gets all DNS;
+// one that doesn't shares lookups with whatever else is configured. A long
+// server list wraps onto indented lines with no label. Only an address that
+// reads as one is kept, IPv4 first.
+function parseDnsStatus(raw) {
+  var lines = stripAnsi(raw).split("\n")
+  var v4 = ""
+  var v6 = ""
+  var routed = false
+  var inServers = false
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim()
+    var rest = null
+    if (line.indexOf("DNS Servers:") === 0) { inServers = true; rest = line.slice(12) }
+    else if (line.indexOf("DNS Domain:") === 0) {
+      inServers = false
+      if ((" " + line.slice(11) + " ").indexOf(" ~. ") !== -1) routed = true
+    }
+    else if (/^[A-Z][A-Za-z ]*:(\s|$)/.test(line) || /^Link \d/.test(line)) inServers = false
+    else if (inServers) rest = line
+    if (rest === null) continue
+    var words = rest.trim().split(/\s+/)
+    for (var j = 0; j < words.length; j++) {
+      if (v4 === "") v4 = cleanIpv4(words[j])
+      if (v6 === "" && /^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,7}$/i.test(words[j])) v6 = words[j].toLowerCase()
+    }
+  }
+  var server = v4 !== "" ? v4 : v6
+  return { server: server, routed: server !== "" && routed }
+}
+
 // "Label: value" lines -> ordered list plus a lowercased lookup map.
 // Guards against prose (long labels, column-aligned table rows) being
 // mistaken for fields.
