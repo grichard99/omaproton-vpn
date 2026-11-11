@@ -760,11 +760,23 @@ Item {
 
   // The address websites see. A server sends traffic out from a different
   // address than the one you connect to, and that one is in no file on disk,
-  // so it has to be asked for: one plain-text request to ip.me, which Proton
-  // runs, pinned to the tunnel device so it cannot leave any other way (with
-  // the tunnel gone, curl fails instead of asking over the bare connection).
+  // so it has to be asked for: one plain-text request to ip.me, pinned to the
+  // tunnel device so it cannot leave any other way (with the tunnel gone,
+  // curl fails instead of asking over the bare connection).
+  //
+  // ip.me is owned by Proton and exists for exactly this: telling you which
+  // address the internet sees you as. The domain is registered to Proton AG
+  // (`whois ip.me`), the company already carrying this traffic, so no new
+  // party learns anything. Asked by curl it answers with the
+  // caller's address as one line of plain text and nothing else. Nothing is
+  // sent to it beyond the request itself: no account, no identifier, no
+  // parameters. All it can see is the VPN's exit address, which is what every
+  // website sees anyway. Try it: `curl https://ip.me`.
+  //
   // Asked once per connection, and only with the panel open over a settled
-  // tunnel: never on a timer, never in the background.
+  // tunnel: never on a timer, never in the background. The answer is used
+  // only if it is a plain IPv4 address (Model.cleanIpv4), shown in the Exit
+  // IP row, and copied if that row is clicked. It is not stored or logged.
   property string exitIp: ""
   property string _exitIpFor: ""
   property string _exitIpAsked: ""
@@ -784,6 +796,9 @@ Item {
     if (exitIp !== "" || exitIpProcess.running || exitIpRetry.running || _exitIpTries >= 3) return
     _exitIpTries++
     _exitIpAsked = key
+    // --disable ignores any curlrc, --proto =https refuses anything but
+    // HTTPS, --max-filesize refuses a reply larger than an address needs,
+    // and --interface is what keeps the request inside the tunnel.
     exitIpProcess.command = ["curl", "--disable", "--ipv4", "--silent", "--max-time", "6",
                              "--proto", "=https", "--max-filesize", "64",
                              "--interface", linkDevice, "https://ip.me"]

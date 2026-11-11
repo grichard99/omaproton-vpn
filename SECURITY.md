@@ -23,10 +23,13 @@ section:
   or 2FA code.
 - Makes two kinds of network request of its own, both only through the VPN
   tunnel: a NAT-PMP renewal to the VPN gateway while port forwarding is
-  switched on, and one request to `https://ip.me` (run by Proton) for the
-  Exit IP row when the panel is opened while connected. The second is bound
-  to the tunnel device, so it fails if the VPN is down and never goes out
-  over the normal connection. The world map is drawn from bundled data and
+  switched on, and one request to `https://ip.me` for the Exit IP row when
+  the panel is opened while connected. ip.me is owned by Proton and exists
+  for exactly this, telling you which address the internet sees you as (the
+  domain is registered to Proton AG, see `whois ip.me`). The
+  request carries no account or identifier, is bound to the tunnel device,
+  so it fails if the VPN is down and never goes out over the normal
+  connection, and all ip.me can see is the VPN's exit address. The world map is drawn from bundled data and
   the Proton client's own cache.
 - Never asks for root. The CLI install goes through Omarchy's installer, which
   owns the password prompt in a terminal.

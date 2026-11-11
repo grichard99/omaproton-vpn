@@ -338,8 +338,8 @@ Two address rows sit under the location, and clicking either copies it:
   one isn't in any file, so the widget asks for it: one request to
   [ip.me](https://ip.me), Proton's own "what's my IP" page, which answers with
   the address and nothing else. The row appears a moment after you open the
-  panel. See [Security and privacy](#security-and-privacy) for exactly when
-  that request is made.
+  panel. See [Security and privacy](#security-and-privacy) for what ip.me is
+  and exactly when that request is made.
 
 With [port forwarding](#port-forwarding) on and a P2P server connected, a
 **Forwarded port** row appears. Click it to copy the number; it reads "Copied"
@@ -759,6 +759,27 @@ client for its server list, which the client refreshes from Proton's API only
 when its own cache has expired, server loads every ~15 minutes, the full list
 every ~3 hours, and only while connected. The widget's polling doesn't add API
 traffic beyond what the client already does on its own schedule.
+
+**What ip.me is, and why the widget talks to it.** [ip.me](https://ip.me) is
+owned by Proton, the same company that runs the VPN, and it exists for exactly
+this purpose: telling you which IP address the internet sees you as. The
+domain is registered to Proton AG, which you can check with `whois ip.me`.
+Opened in a browser it shows your address and location. Asked
+by a command-line tool it replies with one line of plain text, your address.
+The widget uses it because the exit address isn't in any file on your
+computer; something on the internet has to say what it sees.
+
+- What is sent: a plain HTTPS request, with no account, token, identifier or
+  parameters of any kind.
+- What ip.me can see: the VPN server's exit address, the same thing every
+  website you visit sees. It cannot see your real address, because the request
+  is bound to the tunnel and fails if the tunnel is down.
+- What comes back: an address, which must be a plain IPv4 address or it is
+  discarded. It is shown in the Exit IP row and copied if you click it. It is
+  never stored, logged, or sent anywhere.
+- See it for yourself: run `curl https://ip.me` in a terminal while connected.
+  The exact command the widget runs is
+  `curl --disable --ipv4 --silent --max-time 6 --proto =https --max-filesize 64 --interface proton0 https://ip.me`.
 
 **Notifications** are sent straight to the desktop notification service over
 D-Bus and contain only the connection state, the server and its location, and
