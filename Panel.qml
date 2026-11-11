@@ -2633,6 +2633,8 @@ Panel {
 
   component InfoLabel: Text {
     color: root.foreground
+    // Labels in the detail rows come from the CLI's output too.
+    textFormat: Text.PlainText
     opacity: 0.6
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall

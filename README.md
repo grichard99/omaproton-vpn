@@ -702,7 +702,9 @@ Omarchy plugin. It:
   two files of its own under `~/.local/state/omarchy-protonvpn/`
   (`state.json`: your profiles, recent location labels, whether you dismissed
   the Kill Switch prompt, and whether Always On is on; `notification-icon.svg`: the
-  Proton mark in your theme's colour, for the notification)
+  Proton mark in your theme's colour, for the notification). If `state.json`
+  can't be read at startup (a slip in a hand edit, say), what was in it is
+  kept beside it as `state.json.unreadable` before a fresh one is saved
 - writes one file that isn't its own, and only if you turn split tunneling on:
   `~/.config/Proton/VPN/settings.json`, Proton's own settings. Rules below.
 

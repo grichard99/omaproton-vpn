@@ -10,6 +10,13 @@ function stripAnsi(text) {
   return String(text || "").replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
 }
 
+// One printable line no longer than max, for text read back from a file.
+function oneLine(text, max) {
+  return String(text === undefined || text === null ? "" : text)
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, " ")
+    .replace(/\s+/g, " ").trim().slice(0, max)
+}
+
 // A dotted IPv4 address and nothing else, or "". Everything shown in an IP
 // row passes through here, whatever printed it.
 function cleanIpv4(text) {
@@ -289,7 +296,8 @@ function parseConfig(raw) {
 // set is refused outright rather than escaped, it has no business in a
 // username, and refusing is simpler to reason about than quoting.
 function validUsername(text) {
-  return /^[A-Za-z0-9._+@-]{1,254}$/.test(String(text || "").trim())
+  // No leading dash: the CLI would read the name as one of its options.
+  return /^[A-Za-z0-9._+@][A-Za-z0-9._+@-]{0,253}$/.test(String(text || "").trim())
 }
 
 // Single-quote for POSIX sh. The terminal launcher joins its arguments into
