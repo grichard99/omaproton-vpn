@@ -10,6 +10,16 @@ function stripAnsi(text) {
   return String(text || "").replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")
 }
 
+// A dotted IPv4 address and nothing else, or "". Everything shown in an IP
+// row passes through here, whatever printed it.
+function cleanIpv4(text) {
+  var s = String(text === undefined || text === null ? "" : text).trim()
+  var m = s.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/)
+  if (!m) return ""
+  for (var i = 1; i <= 4; i++) if (Number(m[i]) > 255) return ""
+  return Number(m[1]) + "." + Number(m[2]) + "." + Number(m[3]) + "." + Number(m[4])
+}
+
 // "Label: value" lines -> ordered list plus a lowercased lookup map.
 // Guards against prose (long labels, column-aligned table rows) being
 // mistaken for fields.

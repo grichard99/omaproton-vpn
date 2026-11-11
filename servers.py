@@ -164,34 +164,39 @@ def clean_ip(value):
 
 
 def server_ip(s):
-    """The IP to show for a connected server, as (ip, kind), or (None, None).
+    """The address the client connects to for this server, or None.
 
-    On a regular server the machine you connect to is the one your traffic
-    leaves from, and every physical machine behind one name shares that IP,
-    so the name alone is enough: kind "exit".
+    This is the server's inbound address. The address websites see (the exit
+    IP) is a different one on many servers and isn't in the list at all: its
+    ExitIP field repeats the inbound address. The panel looks that one up
+    separately.
 
-    Secure Core is two hops, and the list only describes the first: its
-    ExitIP repeats the entry address in Sweden, Switzerland or Iceland. The
-    real exit isn't anywhere on disk, so show the entry hop, kind "entry",
-    picked out by the client's own connection record. If that record names
-    another server (written late, or left from an earlier connection), show
-    nothing rather than a guess.
+    On a regular server every physical machine behind one name shares one
+    address, so the name alone is enough. Secure Core names have several
+    entry machines, so the one in use is picked out by the client's own
+    connection record. If that record names another server (written late, or
+    left from an earlier connection), return nothing rather than a guess.
     """
-    machines = s.get("Servers") or []
-    if not (s.get("Features") or 0) & SECURE_CORE:
-        ips = {clean_ip(m.get("ExitIP")) for m in machines} - {None}
-        return (ips.pop(), "exit") if len(ips) == 1 else (None, None)
+    machines = s.get("Servers")
+    if not isinstance(machines, list):
+        return None
+    machines = [m for m in machines if isinstance(m, dict)]
+    features = s.get("Features")
+    if not (features if type(features) is int else 0) & SECURE_CORE:
+        ips = {clean_ip(m.get("EntryIP")) for m in machines} - {None}
+        return ips.pop() if len(ips) == 1 else None
     try:
         with open(CONNECTION, "r") as fh:
             record = json.load(fh).get("server") or {}
+        wanted = str(record.get("server_name") or "").upper()
+        ip = clean_ip(record.get("server_ip"))
     except (OSError, ValueError, AttributeError):
-        return None, None
-    if str(record.get("server_name") or "").upper() != (s.get("Name") or "").upper():
-        return None, None
-    ip = clean_ip(record.get("server_ip"))
+        return None
+    if wanted != str(s.get("Name") or "").upper():
+        return None
     if ip is None or ip not in {clean_ip(m.get("EntryIP")) for m in machines}:
-        return None, None
-    return ip, "entry"
+        return None
+    return ip
 
 
 def locate(data, name):
@@ -214,10 +219,9 @@ def locate(data, name):
             # makes a point of it when that's what you asked for.
             "p2p": bool(features & P2P),
         }
-        ip, kind = server_ip(s)
+        ip = server_ip(s)
         if ip:
             place["ip"] = ip
-            place["ipKind"] = kind
         entry_code = (s.get("EntryCountry") or "").upper()
         if (s.get("Features") or 0) & SECURE_CORE and entry_code and entry_code != place["code"]:
             entry = country_place(data, entry_code)

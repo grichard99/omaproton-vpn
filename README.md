@@ -328,10 +328,18 @@ The **Server** line updates within seconds from NetworkManager even while a
 connect is still in progress. The other rows come from the CLI and can lag a
 moment behind.
 
-An **Exit IP** row sits under the location: the public address your traffic
-leaves from, read from Proton's server list, no lookup over the network. Click
-it to copy. On Secure Core the list only knows the first hop, so the row reads
-**Entry IP** and shows the Swiss, Swedish or Icelandic server you connected to.
+Two address rows sit under the location, and clicking either copies it:
+
+- **Server IP** is the address your computer connects to. It comes from
+  Proton's server list on disk. On Secure Core it's the Swiss, Swedish or
+  Icelandic entry server.
+- **Exit IP** is the address websites see you as. A VPN server usually sends
+  traffic out from a different address than the one you connect to, and that
+  one isn't in any file, so the widget asks for it: one request to
+  [ip.me](https://ip.me), Proton's own "what's my IP" page, which answers with
+  the address and nothing else. The row appears a moment after you open the
+  panel. See [Security and privacy](#security-and-privacy) for exactly when
+  that request is made.
 
 With [port forwarding](#port-forwarding) on and a P2P server connected, a
 **Forwarded port** row appears. Click it to copy the number; it reads "Copied"
@@ -668,12 +676,21 @@ This plugin runs unsandboxed inside the Omarchy shell process, like every
 Omarchy plugin. It:
 
 - stores no credentials, tokens, or account data
-- makes no network requests of its own, with one exception you switch on:
-  with port forwarding on and the tunnel up, `port.py` sends a NAT-PMP renewal
-  to the VPN gateway (`10.2.0.1`, inside the tunnel) every 45 seconds. That is
-  the same exchange Proton's own guide has you run, it goes nowhere else, and
-  the answer is only shown in the panel and copied to the clipboard when you
-  click it
+- makes two kinds of network request of its own, both only through the
+  tunnel, and nothing else:
+  - with port forwarding on (a switch you turn on) and the tunnel up,
+    `port.py` sends a NAT-PMP renewal to the VPN gateway (`10.2.0.1`, inside
+    the tunnel) every 45 seconds. That is the same exchange Proton's own guide
+    has you run, it goes nowhere else, and the answer is only shown in the
+    panel and copied to the clipboard when you click it
+  - for the Exit IP row, one `curl` request to `https://ip.me`, which Proton
+    runs. It is made when you open the panel while connected, once per
+    connection (up to three tries if the tunnel isn't carrying traffic yet),
+    never on a timer and never with the panel closed. It is bound to the
+    tunnel device, so if the VPN is down the request fails; it cannot go out
+    over your normal connection, and ip.me only ever sees the VPN's address.
+    The answer must be a plain IPv4 address or it is thrown away, and it is
+    only shown in the panel and copied when you click it
 - never asks for root, the CLI install runs through Omarchy's own installer
   in a terminal that owns the password prompt
 - never downloads or executes remote code

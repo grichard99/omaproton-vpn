@@ -135,7 +135,10 @@ Item {
     portProcess.running = true
   }
 
-  onConnectedChanged: if (!connected) { forwardedPort = ""; activeProfile = "" }
+  onConnectedChanged: {
+    if (!connected) { forwardedPort = ""; activeProfile = "" }
+    lookupExitIp()
+  }
 
   // Copy is the only thing the widget ever does with the port.
   function copyForwardedPort() {
@@ -146,6 +149,11 @@ Item {
   function copyServerIp() {
     if (serverIp === "") return
     Quickshell.execDetached(["wl-copy", "--", serverIp])
+  }
+
+  function copyExitIp() {
+    if (exitIp === "") return
+    Quickshell.execDetached(["wl-copy", "--", exitIp])
   }
 
   // Persisted across restarts: last few places connected to, and whether the
@@ -745,10 +753,45 @@ Item {
   // clicked. Not persisted; after a restart the header shows the name.
   property bool p2pRequested: false
   readonly property bool currentP2p: !!(currentPlace && currentPlace.p2p === true)
-  // The connected server's IP from servers.py --locate. On Secure Core it is
-  // the entry hop: the exit machine's address isn't in Proton's list.
-  readonly property string serverIp: currentPlace && typeof currentPlace.ip === "string" ? currentPlace.ip : ""
-  readonly property bool serverIpIsEntry: !!(currentPlace && currentPlace.ipKind === "entry")
+  // The address this computer connects to, from servers.py --locate. On
+  // Secure Core that is the entry hop.
+  readonly property string serverIp: currentPlace && currentPlace.name === displayServer
+                                     ? Model.cleanIpv4(currentPlace.ip) : ""
+
+  // The address websites see. A server sends traffic out from a different
+  // address than the one you connect to, and that one is in no file on disk,
+  // so it has to be asked for: one plain-text request to ip.me, which Proton
+  // runs, pinned to the tunnel device so it cannot leave any other way (with
+  // the tunnel gone, curl fails instead of asking over the bare connection).
+  // Asked once per connection, and only with the panel open over a settled
+  // tunnel: never on a timer, never in the background.
+  property string exitIp: ""
+  property string _exitIpFor: ""
+  property string _exitIpAsked: ""
+  property int _exitIpTries: 0
+  readonly property string _exitIpKey: linkActive && linkDevice !== "" && linkServer !== ""
+                                       ? linkDevice + "|" + linkServer : ""
+
+  function lookupExitIp() {
+    var key = _exitIpKey
+    if (key !== _exitIpFor) {
+      exitIp = ""
+      _exitIpFor = key
+      _exitIpTries = 0
+      exitIpRetry.stop()
+    }
+    if (key === "" || !panelOpen || !connected || busy) return
+    if (exitIp !== "" || exitIpProcess.running || exitIpRetry.running || _exitIpTries >= 3) return
+    _exitIpTries++
+    _exitIpAsked = key
+    exitIpProcess.command = ["curl", "--disable", "--ipv4", "--silent", "--max-time", "6",
+                             "--proto", "=https", "--max-filesize", "64",
+                             "--interface", linkDevice, "https://ip.me"]
+    exitIpProcess.running = true
+  }
+
+  on_ExitIpKeyChanged: lookupExitIp()
+  onBusyChanged: lookupExitIp()
   // Which Quick Connect row the current connection was asked with, or ""
   // for a named place: that row's glyph fills in while you are on it. A
   // feature-only profile counts as its row. Not persisted, like the above.
@@ -1264,6 +1307,30 @@ Item {
     refresh()
     loadCountries(false)
     loadConfig()
+    // Up to three tries each time the panel is opened, not three for ever.
+    if (exitIp === "") _exitIpTries = 0
+    lookupExitIp()
+  }
+
+  Process {
+    id: exitIpProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: exitIpStdout; waitForEnd: true }
+    onExited: function(exitCode) {
+      // An answer for a tunnel that has since changed is not this one's.
+      if (root._exitIpAsked !== root._exitIpKey) { root.lookupExitIp(); return }
+      var ip = exitCode === 0 ? Model.cleanIpv4(String(exitIpStdout.text || "")) : ""
+      if (ip !== "") root.exitIp = ip
+      else if (root._exitIpTries < 3) exitIpRetry.restart()
+    }
+  }
+
+  // A tunnel can be up a moment before it carries traffic.
+  Timer {
+    id: exitIpRetry
+    interval: 3000
+    onTriggered: root.lookupExitIp()
   }
 
   Process {

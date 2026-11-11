@@ -1288,21 +1288,29 @@ Panel {
               }
             }
             InfoPair { visible: vpn.location !== ""; label: "Location"; value: vpn.location }
-            // Its own row, so the whole address fits. Click to copy, like
-            // the forwarded port.
+            // Two addresses, each on its own row so it fits, click to copy
+            // like the forwarded port. Server IP is what this computer
+            // connects to; Exit IP is what websites see.
             CopyPair {
               visible: vpn.serverIp !== ""
-              label: vpn.serverIpIsEntry ? "Entry IP" : "Exit IP"
+              label: "Server IP"
               value: vpn.serverIp
-              copied: root.ipCopied
-              onCopy: root.copyIp()
+              copied: root.copiedRow === "serverIp"
+              onCopy: root.copyRow("serverIp")
+            }
+            CopyPair {
+              visible: vpn.exitIp !== ""
+              label: "Exit IP"
+              value: vpn.exitIp
+              copied: root.copiedRow === "exitIp"
+              onCopy: root.copyRow("exitIp")
             }
             CopyPair {
               visible: vpn.forwardedPort !== ""
               label: "Forwarded port"
               value: vpn.forwardedPort
-              copied: root.portCopied
-              onCopy: root.copyPort()
+              copied: root.copiedRow === "port"
+              onCopy: root.copyRow("port")
             }
 
             Repeater {
@@ -2556,22 +2564,16 @@ Panel {
     }
   }
 
-  // A 2 s "Copied" flash on the forwarded port row.
-  property bool portCopied: false
-  Timer { id: portCopiedTimer; interval: 2000; onTriggered: root.portCopied = false }
-  function copyPort() {
-    vpn.copyForwardedPort()
-    portCopied = true
-    portCopiedTimer.restart()
-  }
-
-  // The same flash on the Exit IP row.
-  property bool ipCopied: false
-  Timer { id: ipCopiedTimer; interval: 2000; onTriggered: root.ipCopied = false }
-  function copyIp() {
-    vpn.copyServerIp()
-    ipCopied = true
-    ipCopiedTimer.restart()
+  // A 2 s "Copied" flash on whichever copy row was clicked.
+  property string copiedRow: ""
+  Timer { id: copiedTimer; interval: 2000; onTriggered: root.copiedRow = "" }
+  function copyRow(which) {
+    if (which === "port") vpn.copyForwardedPort()
+    else if (which === "serverIp") vpn.copyServerIp()
+    else if (which === "exitIp") vpn.copyExitIp()
+    else return
+    copiedRow = which
+    copiedTimer.restart()
   }
 
   // An InfoPair you click to copy the value. The value carries a copy glyph
