@@ -1305,6 +1305,14 @@ Panel {
               copied: root.copiedRow === "exitIp"
               onCopy: root.copyRow("exitIp")
             }
+            // Which resolver gets the lookups, in the warning colour when
+            // the tunnel isn't the only one.
+            InfoPair {
+              visible: vpn.dnsText !== ""
+              label: "DNS"
+              value: vpn.dnsText
+              warn: !vpn.dnsRouted
+            }
             CopyPair {
               visible: vpn.forwardedPort !== ""
               label: "Forwarded port"
@@ -2619,6 +2627,7 @@ Panel {
   component InfoPair: Row {
     property string label: ""
     property string value: ""
+    property bool warn: false
 
     width: parent.width
     spacing: Style.space(8)
@@ -2628,7 +2637,7 @@ Panel {
       width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth - parent.spacing * 2)
       height: 1
     }
-    InfoValue { text: value }
+    InfoValue { text: value; color: warn ? root.urgent : root.foreground }
   }
 
   component InfoLabel: Text {

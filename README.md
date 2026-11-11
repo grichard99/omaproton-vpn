@@ -341,6 +341,14 @@ Two address rows sit under the location, and clicking either copies it:
   panel. See [Security and privacy](#security-and-privacy) for exactly when
   that request is made.
 
+A **DNS** row shows where your lookups go, which is how a VPN can leak the
+list of sites you visit while still hiding your address. `10.2.0.1 · Proton`
+means every lookup goes to Proton's resolver inside the tunnel (`Custom` if
+you set your own DNS in Proton's settings). If the tunnel isn't the only
+resolver in play, the row reads **May bypass the VPN** in the warning colour.
+It is read from the system resolver (`resolvectl`), with no network request,
+and is only shown on machines that use that resolver.
+
 With [port forwarding](#port-forwarding) on and a P2P server connected, a
 **Forwarded port** row appears. Click it to copy the number; it reads "Copied"
 for a moment. Paste it into your torrent client's listening port.
@@ -697,7 +705,9 @@ Omarchy plugin. It:
 - runs every command as an argument list, never through a shell, with one
   exception below
 - reads Proton's server cache read-only (city list, coordinates, and the map's
-  connected-city lookup all come from it), reads the tunnel's byte counters
+  connected-city lookup all come from it), asks the system resolver which
+  DNS server the tunnel uses (`resolvectl status`, local) when the panel
+  opens, reads the tunnel's byte counters
   under `/sys/class/net/` once a second while the panel is open, and writes
   two files of its own under `~/.local/state/omarchy-protonvpn/`
   (`state.json`: your profiles, recent location labels, whether you dismissed
