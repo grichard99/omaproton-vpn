@@ -52,7 +52,7 @@ Panel {
   // what a harness needs to check the Kill Switch actually moved, and that it
   // asked first.
   readonly property string vpnKs: vpn.config["kill-switch"] || ""
-  readonly property alias killSwitchDialog: killSwitchConfirm
+  readonly property Item killSwitchDialog: killSwitchConfirm
   readonly property int protectionCount: splitDetailVisible ? 8 : 6
   readonly property int signOutIndex: protectionCount - 1
 
@@ -751,8 +751,8 @@ Panel {
   }
 
   // Whichever dimmed dialog is up owns the keyboard.
-  readonly property var openDialog: killSwitchConfirm.opened ? killSwitchConfirm
-                                   : (portForwardConfirm.opened ? portForwardConfirm : null)
+  readonly property var openDialog: killSwitchConfirm && killSwitchConfirm.opened ? killSwitchConfirm
+                                   : (portForwardConfirm && portForwardConfirm.opened ? portForwardConfirm : null)
 
   // Disconnected there is nothing to interrupt, so the change just happens.
   // Connected, it costs a reconnect, and that is what the dialog is for.
@@ -848,6 +848,7 @@ Panel {
   onOpenedChanged: {
     vpn.panelOpen = opened
     if (opened) {
+      panelBuilt = true
       highlight = null
       anchorPending = false
       cursorActive = false
@@ -858,7 +859,7 @@ Panel {
       serverIndex = 0
       if (panelFlick) panelFlick.contentY = 0
       ensureCursor()
-      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+      Qt.callLater(function() { if (keyCatcher) keyCatcher.forceActiveFocus() })
     }
   }
 
@@ -982,6 +983,36 @@ Panel {
     }
   }
 
+  // The panel's contents are built the first time it opens (onOpenedChanged
+  // sets panelBuilt, which turns on panelContent below), not on every monitor
+  // when the shell starts. Until then these are null; the functions above
+  // that reach into the panel go through them.
+  property bool panelBuilt: false
+  readonly property Item keyCatcher: panelContent.item
+  readonly property Item panelFlick: keyCatcher ? keyCatcher.panelFlick : null
+  readonly property Item killSwitchConfirm: keyCatcher ? keyCatcher.killSwitchConfirm : null
+  readonly property Item portForwardConfirm: keyCatcher ? keyCatcher.portForwardConfirm : null
+  readonly property Item usernameField: keyCatcher ? keyCatcher.usernameField : null
+  readonly property Item nudgeButtons: keyCatcher ? keyCatcher.nudgeButtons : null
+  readonly property Item quickSection: keyCatcher ? keyCatcher.quickSection : null
+  readonly property Item quickColumn: keyCatcher ? keyCatcher.quickColumn : null
+  readonly property Item tabRow: keyCatcher ? keyCatcher.tabRow : null
+  readonly property Item protectionColumn: keyCatcher ? keyCatcher.protectionColumn : null
+  readonly property Item splitModeRow: keyCatcher ? keyCatcher.splitModeRow : null
+  readonly property Item splitAppsRow: keyCatcher ? keyCatcher.splitAppsRow : null
+  readonly property Item profileSection: keyCatcher ? keyCatcher.profileSection : null
+  readonly property Item profileColumn: keyCatcher ? keyCatcher.profileColumn : null
+  readonly property Item editorColumn: keyCatcher ? keyCatcher.editorColumn : null
+  readonly property Item nameField: keyCatcher ? keyCatcher.nameField : null
+  readonly property Item whereRow: keyCatcher ? keyCatcher.whereRow : null
+  readonly property Item featureRow: keyCatcher ? keyCatcher.featureRow : null
+  readonly property Item recentSection: keyCatcher ? keyCatcher.recentSection : null
+  readonly property Item recentColumn: keyCatcher ? keyCatcher.recentColumn : null
+  readonly property Item countrySection: keyCatcher ? keyCatcher.countrySection : null
+  readonly property Item filterField: keyCatcher ? keyCatcher.filterField : null
+  readonly property Item countryColumn: keyCatcher ? keyCatcher.countryColumn : null
+  readonly property Item serverColumn: keyCatcher ? keyCatcher.serverColumn : null
+
   KeyboardPanel {
     id: panel
     anchorItem: button
@@ -990,10 +1021,45 @@ Panel {
     open: root.opened
     focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(360))
-    contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(580))
+    contentHeight: panel.fittedContentHeight(keyCatcher ? keyCatcher.implicitHeight : 0, Style.space(580))
 
-    PanelKeyCatcher {
+    // A plain Loader rather than KeyboardPanel's own `content` (Omarchy 4.5
+    // and later), so this works on 4.0.x too. Once built it stays, so a
+    // reopen is instant and keeps its scroll position.
+    Loader {
+      id: panelContent
+      anchors.fill: parent
+      focus: true
+      active: root.panelBuilt
+      sourceComponent: panel.lazyContent
+    }
+
+    property Component lazyContent: PanelKeyCatcher {
       id: keyCatcher
+      implicitHeight: column.implicitHeight
+      property alias panelFlick: panelFlick
+      property alias killSwitchConfirm: killSwitchConfirm
+      property alias portForwardConfirm: portForwardConfirm
+      property alias usernameField: usernameField
+      property alias nudgeButtons: nudgeButtons
+      property alias quickSection: quickSection
+      property alias quickColumn: quickColumn
+      property alias tabRow: tabRow
+      property alias protectionColumn: protectionColumn
+      property alias splitModeRow: splitModeRow
+      property alias splitAppsRow: splitAppsRow
+      property alias profileSection: profileSection
+      property alias profileColumn: profileColumn
+      property alias editorColumn: editorColumn
+      property alias nameField: nameField
+      property alias whereRow: whereRow
+      property alias featureRow: featureRow
+      property alias recentSection: recentSection
+      property alias recentColumn: recentColumn
+      property alias countrySection: countrySection
+      property alias filterField: filterField
+      property alias countryColumn: countryColumn
+      property alias serverColumn: serverColumn
       anchors.fill: parent
       // A text field owns the keyboard while it has focus, otherwise every
       // letter typed would drive the cursor instead of the input.
