@@ -1241,19 +1241,14 @@ Panel {
             width: parent.width
             spacing: Style.space(8)
 
-            TextField {
+            PlainInput {
               id: usernameField
               width: parent.width
               foreground: root.foreground
               placeholderText: "Proton username or email"
-              Keys.onEscapePressed: function(event) {
-                keyCatcher.forceActiveFocus()
-                event.accepted = true
-              }
-              Keys.onReturnPressed: function(event) {
-                root.submitSignIn()
-                event.accepted = true
-              }
+              maximumLength: 254
+              onCancelled: keyCatcher.forceActiveFocus()
+              onAccepted: root.submitSignIn()
             }
 
             ActionRow {
@@ -1288,12 +1283,37 @@ Panel {
               }
             }
             InfoPair { visible: vpn.location !== ""; label: "Location"; value: vpn.location }
+            // Two addresses, each on its own row so it fits, click to copy
+            // like the forwarded port. Server IP is what this computer
+            // connects to; Exit IP is what websites see.
+            CopyPair {
+              visible: vpn.serverIp !== ""
+              label: "Server IP"
+              value: vpn.serverIp
+              copied: root.copiedRow === "serverIp"
+              onCopy: root.copyRow("serverIp")
+            }
+            CopyPair {
+              visible: vpn.exitIp !== ""
+              label: "Exit IP"
+              value: vpn.exitIp
+              copied: root.copiedRow === "exitIp"
+              onCopy: root.copyRow("exitIp")
+            }
+            // Which resolver gets the lookups, in the warning colour when
+            // the tunnel isn't the only one.
+            InfoPair {
+              visible: vpn.dnsText !== ""
+              label: "DNS"
+              value: vpn.dnsText
+              warn: !vpn.dnsRouted
+            }
             CopyPair {
               visible: vpn.forwardedPort !== ""
               label: "Forwarded port"
               value: vpn.forwardedPort
-              copied: root.portCopied
-              onCopy: root.copyPort()
+              copied: root.copiedRow === "port"
+              onCopy: root.copyRow("port")
             }
 
             Repeater {
@@ -1742,21 +1762,15 @@ Panel {
                 anchors.rightMargin: Style.space(10)
                 spacing: Style.space(8)
 
-                TextField {
+                PlainInput {
                   id: nameField
                   width: parent.width
                   foreground: root.foreground
                   placeholderText: "Name, like Home or Work"
                   maximumLength: vpn.profileNameMax
                   hasCursor: root.cursorActive && root.editorRow === "name"
-                  Keys.onEscapePressed: function(event) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                  Keys.onReturnPressed: function(event) {
-                    root.saveDraft()
-                    event.accepted = true
-                  }
+                  onCancelled: keyCatcher.forceActiveFocus()
+                  onAccepted: root.saveDraft()
                 }
 
                 // One swatch per theme colour; the chosen one grows a ring.
@@ -1969,31 +1983,30 @@ Panel {
               }
             }
 
-            TextField {
+            PlainInput {
               id: filterField
               visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               foreground: root.foreground
               placeholderText: vpn.countriesLoaded ? "Filter countries  (press /)" : "Loading countries…"
+              maximumLength: 64
               enabled: vpn.countriesLoaded
               text: root.filterQuery
               onTextChanged: {
                 root.filterQuery = text
                 root.countryIndex = 0
               }
-              Keys.onEscapePressed: function(event) {
-                if (text !== "") text = ""
+              onCancelled: {
+                clear()
                 keyCatcher.forceActiveFocus()
-                event.accepted = true
               }
-              Keys.onReturnPressed: function(event) {
+              onAccepted: {
                 var c = root.filteredCountries[0]
                 if (c) {
                   vpn.connectCountry(c.code, c.name)
                   keyCatcher.forceActiveFocus()
                   root.showConnection()
                 }
-                event.accepted = true
               }
             }
 
@@ -2547,13 +2560,16 @@ Panel {
     }
   }
 
-  // A 2 s "Copied" flash on the forwarded port row.
-  property bool portCopied: false
-  Timer { id: portCopiedTimer; interval: 2000; onTriggered: root.portCopied = false }
-  function copyPort() {
-    vpn.copyForwardedPort()
-    portCopied = true
-    portCopiedTimer.restart()
+  // A 2 s "Copied" flash on whichever copy row was clicked.
+  property string copiedRow: ""
+  Timer { id: copiedTimer; interval: 2000; onTriggered: root.copiedRow = "" }
+  function copyRow(which) {
+    if (which === "port") vpn.copyForwardedPort()
+    else if (which === "serverIp") vpn.copyServerIp()
+    else if (which === "exitIp") vpn.copyExitIp()
+    else return
+    copiedRow = which
+    copiedTimer.restart()
   }
 
   // An InfoPair you click to copy the value. The value carries a copy glyph
@@ -2599,6 +2615,7 @@ Panel {
   component InfoPair: Row {
     property string label: ""
     property string value: ""
+    property bool warn: false
 
     width: parent.width
     spacing: Style.space(8)
@@ -2608,11 +2625,13 @@ Panel {
       width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth - parent.spacing * 2)
       height: 1
     }
-    InfoValue { text: value }
+    InfoValue { text: value; color: warn ? root.urgent : root.foreground }
   }
 
   component InfoLabel: Text {
     color: root.foreground
+    // Labels in the detail rows come from the CLI's output too.
+    textFormat: Text.PlainText
     opacity: 0.6
     font.family: root.fontFamily
     font.pixelSize: Style.font.bodySmall
