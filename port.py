@@ -12,7 +12,9 @@ is that exchange, in the standard library, printed as JSON:
 
 Both requests ask for external port 0 with a 60 second lifetime, the values
 Proton's guide uses, so the gateway hands back the port it already assigned
-to this session. Nothing is sent anywhere but the gateway inside the tunnel.
+to this session. Nothing is addressed anywhere but the gateway inside the
+tunnel. The socket is not pinned to the tunnel device: the caller only runs
+this while the tunnel is up, and the tunnel's route is what carries it there.
 """
 import json
 import socket
