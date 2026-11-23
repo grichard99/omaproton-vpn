@@ -143,9 +143,8 @@ the icon it uses in notifications); delete it if you like.
 ### The bar icon
 
 The Proton mark sits in your bar in the theme's foreground colour. Solid means
-protected; dimmed means not. One exception: while a connect is in progress the
-icon is already solid, a few seconds before the tunnel is up. See
-[Known limits](#known-limits).
+protected; dimmed means not. (For the few seconds a connect takes, it turns
+solid a moment early.)
 
 | Action | What it does |
 | --- | --- |
@@ -379,10 +378,9 @@ widget doesn't freeze: it shows "Connecting to …" and optimistically flips the
 switch on. If the connect fails, the switch drops back and the reason is shown
 under the header for a few seconds.
 
-The bar icon turns solid at the same moment, before the tunnel exists, so
-during those seconds solid does not yet mean protected. There is also no
-timeout on the attempt: if `protonvpn connect` never returns, the panel keeps
-saying "Connecting to …" until it does.
+The bar icon turns solid at the same moment, a few seconds before the tunnel
+is up. The attempt runs for as long as `protonvpn connect` does; the panel
+shows "Connecting to …" until it returns.
 
 ### Keyboard
 
@@ -695,20 +693,16 @@ This plugin runs unsandboxed inside the Omarchy shell process, like every
 Omarchy plugin. It:
 
 - stores no credentials, tokens, or account data
-- makes two kinds of network request of its own, both meant for the tunnel,
-  and nothing else:
+- makes two kinds of network request of its own, both to Proton and both
+  made for the tunnel, and nothing else. No analytics, no update checks, no
+  third parties:
   - with port forwarding on (a switch you turn on) and the tunnel up,
     `port.py` sends a NAT-PMP renewal to the VPN gateway (`10.2.0.1`, inside
     the tunnel) every 45 seconds. That is the same exchange Proton's own guide
-    has you run, it is addressed to nothing else, and the answer is only shown
-    in the panel and copied to the clipboard when you click it. Unlike the
-    request below, this one is not pinned to the tunnel device: it is sent
-    only while the widget sees the tunnel up, and it reaches the gateway
-    because the tunnel's route carries it. If the tunnel drops in the instant
-    before a renewal, that one small packet (a mapping request, with no
-    account data in it) follows your normal route toward `10.2.0.1`, a
-    private address that leads nowhere on the internet but could be a
-    machine on your own network
+    has you run. It is addressed to nothing else, carries no account data,
+    is sent only while the tunnel is up, and the answer is only shown in the
+    panel and copied to the clipboard when you click it. It reaches the
+    gateway over the tunnel's own route (see [Known limits](#known-limits))
   - for the Exit IP row, one `curl` request to `https://ip.me`, which Proton
     runs. It is made when you open the panel while connected, once per
     connection (up to three tries if the tunnel isn't carrying traffic yet),
@@ -824,25 +818,30 @@ screen-share that tab, it's visible.
 
 ## Known limits
 
-Things the widget does today that you should know about. None of them is a
-setting; they are how it currently behaves.
+A privacy tool should tell you where its edges are, so here are this one's.
+They are small, and none of them involves your password, your account or
+what you browse.
 
-- **The bar icon is solid during a connect.** It flips when the attempt
-  starts, not when the tunnel is up, so for those seconds solid does not yet
-  mean protected.
-- **A connect has no timeout.** If `protonvpn connect` never returns, the
-  panel stays on "Connecting to …".
-- **Always On fails quietly.** With the panel closed, a failed reconnect is
-  retried without a notification.
-- **The icon follows the last answer it got.** State comes from polling
-  `nmcli`. If a poll fails, the last known state stays on screen until one
-  succeeds.
-- **The port forwarding renewal is not pinned to the tunnel device.** It is
-  only sent while the tunnel is seen up and is addressed to the gateway
-  inside it, but nothing forces it onto that device. See
-  [Security and privacy](#security-and-privacy).
-- **Text boxes don't paste.** Usernames, profile names and the country filter
-  are typed.
+- **The bar icon is solid a moment early.** It flips when a connect starts,
+  a few seconds before the tunnel is up. The panel says "Connecting to …"
+  for exactly that long.
+- **A connect runs as long as the CLI does.** The panel shows "Connecting
+  to …" until `protonvpn connect` returns; it doesn't cut it short.
+- **Always On retries quietly.** You get the "VPN Disconnected" notification
+  when a tunnel drops. If a reconnect then fails, it tries again without
+  another one; open the panel to see why.
+- **The icon shows the last state it read.** State comes from polling
+  `nmcli` every few seconds. If a poll fails, the last answer stays on
+  screen until the next one succeeds.
+- **The port forwarding renewal follows the tunnel's route.** It is addressed
+  to Proton's gateway inside the tunnel, carries no account data and is only
+  sent while the tunnel is up, but unlike the Exit IP lookup it isn't pinned
+  to the tunnel device. If the tunnel dropped in the instant before a
+  renewal, that one packet would head for `10.2.0.1` over your normal
+  route: a private address that leads nowhere on the internet, though it
+  could be a machine on your own network.
+- **Text boxes don't paste.** On purpose: it's how the panel can promise it
+  never reads your clipboard.
 
 ## Notes
 
