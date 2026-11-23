@@ -21,12 +21,14 @@ section:
 - Stores no credentials, tokens, or account data. Sign-in goes to the
   Proton CLI's own prompt in a terminal; the widget never sees the password
   or 2FA code.
-- Makes two kinds of network request of its own, both only through the VPN
+- Makes two kinds of network request of its own, both meant for the VPN
   tunnel: a NAT-PMP renewal to the VPN gateway while port forwarding is
-  switched on, and one request to `https://ip.me` for the Exit IP row when
+  switched on (sent only while the tunnel is seen up and addressed to the
+  gateway inside it, but not pinned to the tunnel device), and one request
+  to `https://ip.me` for the Exit IP row when
   the panel is opened while connected. ip.me is owned by Proton and exists
   for exactly this, telling you which address the internet sees you as (the
-  domain is registered to Proton AG, see `whois ip.me`). The
+  domain is registered to Proton AG, see `whois ip.me`). The ip.me
   request carries no account or identifier, is bound to the tunnel device,
   so it fails if the VPN is down and never goes out over the normal
   connection, and all ip.me can see is the VPN's exit address. The world map is drawn from bundled data and

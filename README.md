@@ -26,6 +26,7 @@ terminal. Click the Proton mark and you're protected.
 - [Using it with Tailscale](#using-it-with-tailscale)
 - [Settings](#settings)
 - [Security and privacy](#security-and-privacy)
+- [Known limits](#known-limits)
 - [Notes](#notes), [Credits](#credits), [License](#license)
 
 ## Why "Oma"
@@ -142,7 +143,9 @@ the icon it uses in notifications); delete it if you like.
 ### The bar icon
 
 The Proton mark sits in your bar in the theme's foreground colour. Solid means
-protected; dimmed means not.
+protected; dimmed means not. One exception: while a connect is in progress the
+icon is already solid, a few seconds before the tunnel is up. See
+[Known limits](#known-limits).
 
 | Action | What it does |
 | --- | --- |
@@ -376,6 +379,11 @@ widget doesn't freeze: it shows "Connecting to …" and optimistically flips the
 switch on. If the connect fails, the switch drops back and the reason is shown
 under the header for a few seconds.
 
+The bar icon turns solid at the same moment, before the tunnel exists, so
+during those seconds solid does not yet mean protected. There is also no
+timeout on the attempt: if `protonvpn connect` never returns, the panel keeps
+saying "Connecting to …" until it does.
+
 ### Keyboard
 
 Everything in the panel is reachable without a mouse, and the keys are Vim's.
@@ -478,6 +486,9 @@ Two things worth knowing:
 - While it's on, **Disconnect** won't keep you disconnected; you'll be
   reconnected within a few seconds. Switch Always On off if you want to stay
   off.
+- A reconnect that fails does so quietly. With the panel closed you get the
+  "VPN Disconnected" notification when the tunnel drops, and nothing more
+  until a later attempt succeeds. Open the panel to see why it failed.
 
 Always On and the Kill Switch are different answers to the same question.
 The Kill Switch stops traffic leaking *while* the tunnel is down; Always On
@@ -684,13 +695,20 @@ This plugin runs unsandboxed inside the Omarchy shell process, like every
 Omarchy plugin. It:
 
 - stores no credentials, tokens, or account data
-- makes two kinds of network request of its own, both only through the
-  tunnel, and nothing else:
+- makes two kinds of network request of its own, both meant for the tunnel,
+  and nothing else:
   - with port forwarding on (a switch you turn on) and the tunnel up,
     `port.py` sends a NAT-PMP renewal to the VPN gateway (`10.2.0.1`, inside
     the tunnel) every 45 seconds. That is the same exchange Proton's own guide
-    has you run, it goes nowhere else, and the answer is only shown in the
-    panel and copied to the clipboard when you click it
+    has you run, it is addressed to nothing else, and the answer is only shown
+    in the panel and copied to the clipboard when you click it. Unlike the
+    request below, this one is not pinned to the tunnel device: it is sent
+    only while the widget sees the tunnel up, and it reaches the gateway
+    because the tunnel's route carries it. If the tunnel drops in the instant
+    before a renewal, that one small packet (a mapping request, with no
+    account data in it) follows your normal route toward `10.2.0.1`, a
+    private address that leads nowhere on the internet but could be a
+    machine on your own network
   - for the Exit IP row, one `curl` request to `https://ip.me`, which Proton
     runs. It is made when you open the panel while connected, once per
     connection (up to three tries if the tunnel isn't carrying traffic yet),
@@ -803,6 +821,28 @@ the protocol.
 **On screen.** Your Proton account email is shown only under Protection →
 Account, not in the panel's default view, but if you screenshot or
 screen-share that tab, it's visible.
+
+## Known limits
+
+Things the widget does today that you should know about. None of them is a
+setting; they are how it currently behaves.
+
+- **The bar icon is solid during a connect.** It flips when the attempt
+  starts, not when the tunnel is up, so for those seconds solid does not yet
+  mean protected.
+- **A connect has no timeout.** If `protonvpn connect` never returns, the
+  panel stays on "Connecting to …".
+- **Always On fails quietly.** With the panel closed, a failed reconnect is
+  retried without a notification.
+- **The icon follows the last answer it got.** State comes from polling
+  `nmcli`. If a poll fails, the last known state stays on screen until one
+  succeeds.
+- **The port forwarding renewal is not pinned to the tunnel device.** It is
+  only sent while the tunnel is seen up and is addressed to the gateway
+  inside it, but nothing forces it onto that device. See
+  [Security and privacy](#security-and-privacy).
+- **Text boxes don't paste.** Usernames, profile names and the country filter
+  are typed.
 
 ## Notes
 
