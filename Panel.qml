@@ -1241,19 +1241,14 @@ Panel {
             width: parent.width
             spacing: Style.space(8)
 
-            TextField {
+            PlainInput {
               id: usernameField
               width: parent.width
               foreground: root.foreground
               placeholderText: "Proton username or email"
-              Keys.onEscapePressed: function(event) {
-                keyCatcher.forceActiveFocus()
-                event.accepted = true
-              }
-              Keys.onReturnPressed: function(event) {
-                root.submitSignIn()
-                event.accepted = true
-              }
+              maximumLength: 254
+              onCancelled: keyCatcher.forceActiveFocus()
+              onAccepted: root.submitSignIn()
             }
 
             ActionRow {
@@ -1767,21 +1762,15 @@ Panel {
                 anchors.rightMargin: Style.space(10)
                 spacing: Style.space(8)
 
-                TextField {
+                PlainInput {
                   id: nameField
                   width: parent.width
                   foreground: root.foreground
                   placeholderText: "Name, like Home or Work"
                   maximumLength: vpn.profileNameMax
                   hasCursor: root.cursorActive && root.editorRow === "name"
-                  Keys.onEscapePressed: function(event) {
-                    keyCatcher.forceActiveFocus()
-                    event.accepted = true
-                  }
-                  Keys.onReturnPressed: function(event) {
-                    root.saveDraft()
-                    event.accepted = true
-                  }
+                  onCancelled: keyCatcher.forceActiveFocus()
+                  onAccepted: root.saveDraft()
                 }
 
                 // One swatch per theme colour; the chosen one grows a ring.
@@ -1994,31 +1983,30 @@ Panel {
               }
             }
 
-            TextField {
+            PlainInput {
               id: filterField
               visible: !root.drilled && vpn.countriesExpanded
               width: parent.width
               foreground: root.foreground
               placeholderText: vpn.countriesLoaded ? "Filter countries  (press /)" : "Loading countries…"
+              maximumLength: 64
               enabled: vpn.countriesLoaded
               text: root.filterQuery
               onTextChanged: {
                 root.filterQuery = text
                 root.countryIndex = 0
               }
-              Keys.onEscapePressed: function(event) {
-                if (text !== "") text = ""
+              onCancelled: {
+                clear()
                 keyCatcher.forceActiveFocus()
-                event.accepted = true
               }
-              Keys.onReturnPressed: function(event) {
+              onAccepted: {
                 var c = root.filteredCountries[0]
                 if (c) {
                   vpn.connectCountry(c.code, c.name)
                   keyCatcher.forceActiveFocus()
                   root.showConnection()
                 }
-                event.accepted = true
               }
             }
 

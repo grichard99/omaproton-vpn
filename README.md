@@ -699,6 +699,11 @@ Omarchy plugin. It:
     over your normal connection, and ip.me only ever sees the VPN's address.
     The answer must be a plain IPv4 address or it is thrown away, and it is
     only shown in the panel and copied when you click it
+- never reads the clipboard. The three text boxes (username, profile name,
+  country filter) take typed text only: the paste keys and a middle click do
+  nothing in them, so whatever another program has copied never reaches the
+  panel. Copying out of a box works, and the panel only writes to the
+  clipboard when you click a row to copy it
 - never asks for root, the CLI install runs through Omarchy's own installer
   in a terminal that owns the password prompt
 - never downloads or executes remote code
