@@ -31,6 +31,8 @@ section:
   so it fails if the VPN is down and never goes out over the normal
   connection, and all ip.me can see is the VPN's exit address. The world map is drawn from bundled data and
   the Proton client's own cache.
+- Never reads the clipboard. The panel's text boxes take typed text only;
+  the paste keys and a middle click do nothing in them.
 - Never asks for root. The CLI install goes through Omarchy's installer, which
   owns the password prompt in a terminal.
 - Runs every command as an argument list, never through a shell, except the
