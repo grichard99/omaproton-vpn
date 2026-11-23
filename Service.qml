@@ -119,8 +119,10 @@ Item {
   // `protonvpn` process is alive, so a bare `status` poll rarely completes
   // it. port.py is that exchange: while the switch is on and the tunnel is
   // up it runs every 45 s (the guide's cadence against a 60 s lifetime),
-  // which both shows the port and keeps it. It's the one network request
-  // the widget makes, to 10.2.0.1 inside the tunnel, never anywhere else.
+  // which both shows the port and keeps it. It's addressed to 10.2.0.1, the
+  // gateway inside the tunnel, and nothing else. It is not pinned to the
+  // tunnel device the way the Exit IP lookup is: portWanted is what keeps it
+  // to times when the tunnel is up.
   property string forwardedPort: ""
   readonly property string portScriptPath: Qt.resolvedUrl("port.py").toString().replace(/^file:\/\//, "")
   readonly property bool portWanted: portForwardingOn && connected && linkActive && !busy
